@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Radar de Leads</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">📡 <strong>Radar de Leads</strong> <span class="muted">negócios sem site</span></div>
+    <nav class="tabs">
+      <button class="tab active" data-view="buscar">Buscar</button>
+      <button class="tab" data-view="funil">Funil <span id="countFunil" class="pill">0</span></button>
+      <button class="tab" data-view="followups">Follow-ups <span id="countFollow" class="pill alert">0</span></button>
+      <button class="tab" data-view="config">Configurações</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- BUSCAR -->
+    <section id="view-buscar" class="view active">
+      <form id="formBusca" class="card search">
+        <label>Cidade
+          <input id="cidade" required placeholder="Ex.: Curitiba, PR">
+        </label>
+        <label>Nicho
+          <select id="nicho"></select>
+        </label>
+        <button class="btn primary" type="submit">🔍 Buscar negócios sem site</button>
+      </form>
+      <p class="hint">Fonte: OpenStreetMap (grátis). Um negócio sem site no mapa pode ter site não cadastrado — confira antes de abordar.</p>
+      <div id="statusBusca" class="status"></div>
+      <div class="results-head hidden" id="resultsHead">
+        <span id="resultsInfo"></span>
+        <div>
+          <label class="inline"><input type="checkbox" id="soContato" checked> só com telefone/WhatsApp</label>
+          <button class="btn" id="addTodos">+ Adicionar quentes ao funil</button>
+        </div>
+      </div>
+      <div id="resultados" class="grid"></div>
+    </section>
+
+    <!-- FUNIL -->
+    <section id="view-funil" class="view">
+      <div class="toolbar">
+        <input id="filtroFunil" placeholder="Filtrar por nome ou cidade…">
+        <button class="btn" id="novoManual">+ Lead manual</button>
+        <button class="btn" id="exportCsv">⬇ Exportar CSV</button>
+      </div>
+      <div id="kanban" class="kanban"></div>
+    </section>
+
+    <!-- FOLLOW-UPS -->
+    <section id="view-followups" class="view">
+      <h2>Retomar contato</h2>
+      <div id="listaFollow"></div>
+    </section>
+
+    <!-- CONFIG -->
+    <section id="view-config" class="view">
+      <form id="formConfig" class="card config">
+        <label>Seu nome (aparece na mensagem)
+          <input id="cfgNome" placeholder="Ex.: Pedro">
+        </label>
+        <label>O que você oferece
+          <input id="cfgOferta" placeholder="Ex.: Crio sites profissionais a partir de R$ 497, prontos em 7 dias.">
+        </label>
+        <label>Dias até o follow-up após o 1º contato
+          <input id="cfgDias" type="number" min="1" max="30" value="3">
+        </label>
+        <label>Chave da API Claude (opcional — para mensagens com IA)
+          <input id="cfgKey" type="password" placeholder="sk-ant-…" autocomplete="off">
+        </label>
+        <p class="hint">A chave fica salva só neste navegador e é enviada apenas para api.anthropic.com. Sem chave, o app usa um modelo de mensagem pronto.</p>
+        <button class="btn primary" type="submit">Salvar</button>
+        <span id="cfgSalvo" class="muted"></span>
+      </form>
+    </section>
+  </main>
+
+  <!-- MODAL LEAD -->
+  <dialog id="modal">
+    <form method="dialog" id="formLead">
+      <div class="modal-head">
+        <h3 id="mNome"></h3>
+        <button class="btn ghost" value="cancel" aria-label="Fechar">✕</button>
+      </div>
+      <div id="mInfo" class="minfo"></div>
+      <div class="row">
+        <label>Etapa <select id="mEtapa"></select></label>
+        <label>Próximo follow-up <input type="date" id="mFollow"></label>
+      </div>
+      <label>Anotações <textarea id="mNotas" rows="3"></textarea></label>
+      <label>Mensagem de abordagem
+        <textarea id="mMsg" rows="7"></textarea>
+      </label>
+      <div class="actions">
+        <button type="button" class="btn" id="mGerar">✨ Gerar mensagem</button>
+        <button type="button" class="btn" id="mCopiar">📋 Copiar</button>
+        <a class="btn wa" id="mWhats" target="_blank" rel="noopener">💬 Abrir WhatsApp</a>
+        <span class="spacer"></span>
+        <button type="button" class="btn danger" id="mExcluir">Excluir</button>
+        <button type="button" class="btn primary" id="mSalvar">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
