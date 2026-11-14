@@ -1,0 +1,654 @@
+<title>Radar de Leads</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: barra fixa com abas → uma view por vez; busca em duas etapas, funil em 5 colunas que viram lista no celular */
+:root {
+  --bg: #f3f5f4; --surface: #ffffff; --sunk: #e9edeb; --ink: #14201c; --muted: #5d6b66; --line: #d7dfdb;
+  --accent: #0f7a5c; --accent-ink: #ffffff; --accent-soft: #dcefe8;
+  --hot: #c2410c; --warm: #b7791f; --cold: #64748b; --wa: #15803d; --danger: #b91c1c;
+  --f-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1513; --surface: #151f1c; --sunk: #1c2824; --ink: #e6eeea; --muted: #94a59f; --line: #2a3833;
+  --accent: #34c49a; --accent-ink: #06231a; --accent-soft: #163a2f;
+  --hot: #f97316; --warm: #eab308; --cold: #94a3b8; --wa: #22c55e; --danger: #f87171; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e1513; --surface: #151f1c; --sunk: #1c2824; --ink: #e6eeea; --muted: #94a59f; --line: #2a3833;
+  --accent: #34c49a; --accent-ink: #06231a; --accent-soft: #163a2f;
+  --hot: #f97316; --warm: #eab308; --cold: #94a3b8; --wa: #22c55e; --danger: #f87171; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+h1, h2, h3, h4 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.muted { color: var(--muted); }
+.wrap { max-width: 1320px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* topo */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; padding-block: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand h1 { font-size: 19px; letter-spacing: -.01em; }
+.brand small { font-size: 12px; color: var(--muted); }
+.radar { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--accent); position: relative; overflow: hidden; flex: none; }
+.radar::after { content: ""; position: absolute; inset: 0; background: conic-gradient(from 0deg, transparent 0 75%, var(--accent) 100%); animation: sweep 3s linear infinite; opacity: .7; }
+@keyframes sweep { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .radar::after { animation: none; } }
+.tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+.tab { border: 0; background: none; padding: 7px 12px; border-radius: 8px; cursor: pointer; color: var(--muted); font-weight: 500; display: inline-flex; gap: 6px; align-items: center; }
+.tab[aria-selected="true"] { background: var(--accent-soft); color: var(--ink); }
+.count { font: 600 11px/1 var(--f-mono); padding: 3px 6px; border-radius: 99px; background: var(--sunk); }
+.count.alert { background: var(--hot); color: #fff; }
+
+main.wrap { padding-block: 20px 48px; }
+.view[hidden] { display: none; }
+.store-note { font-size: 12px; color: var(--muted); margin: -8px 0 14px; }
+
+/* controles */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); padding: 8px 13px; border-radius: 8px; cursor: pointer; font-weight: 500; text-decoration: none; color: var(--ink); white-space: nowrap; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.wa { background: var(--wa); border-color: var(--wa); color: #fff; }
+.btn.ghost { border-color: transparent; background: none; }
+.btn.danger { color: var(--danger); }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+.btn.sm { padding: 5px 9px; font-size: 13px; }
+label.f { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; min-width: 0; }
+input, select, textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; width: 100%; min-width: 0; font-weight: 400; }
+textarea { resize: vertical; }
+
+/* busca */
+.steps { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.step-h { display: flex; gap: 10px; align-items: baseline; }
+.step-n { font: 700 12px var(--f-mono); color: var(--accent); }
+.step-h h2 { font-size: 17px; }
+.panel p { margin: 0; font-size: 14px; color: var(--muted); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 480px) { .row2 { grid-template-columns: 1fr; } }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.spacer { flex: 1; }
+.status { font-size: 14px; font-weight: 500; min-height: 1.5em; }
+.status.err { color: var(--danger); }
+
+.results-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin: 24px 0 12px; }
+.results-head h3 { font-size: 16px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); gap: 12px; }
+.lead { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.lead-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.lead-h h4 { font-size: 15px; overflow-wrap: anywhere; }
+.meta { font-size: 13px; color: var(--muted); display: grid; gap: 2px; overflow-wrap: anywhere; }
+.why { font-size: 12px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 6px; }
+.lead-f { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: auto; }
+.score { font: 700 12px/1 var(--f-mono); padding: 5px 8px; border-radius: 99px; color: #fff; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.score.hot { background: var(--hot); } .score.warm { background: var(--warm); } .score.cold { background: var(--cold); }
+.tag-ex { font: 600 10px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--warm); }
+
+/* funil */
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.toolbar input { flex: 1 1 200px; width: auto; }
+.kanban-scroll { overflow-x: auto; padding-bottom: 6px; }
+.kanban { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 12px; min-width: 1150px; }
+@media (max-width: 700px) { .kanban { grid-template-columns: 1fr; min-width: 0; } .kanban-scroll { overflow: visible; } }
+.col { background: var(--sunk); border-radius: var(--r); padding: 10px; min-height: 160px; display: flex; flex-direction: column; gap: 8px; }
+.col.over { outline: 2px dashed var(--accent); }
+.col-h { display: flex; justify-content: space-between; align-items: center; padding: 2px 4px 4px; }
+.col-h h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
+.empty-col { font-size: 12px; color: var(--muted); padding: 8px 4px; }
+.kcard { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; cursor: pointer; display: grid; gap: 5px; text-align: left; width: 100%; }
+.kcard:hover { border-color: var(--accent); }
+.kcard .t { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.kcard .s { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.due { color: var(--hot); font-weight: 600; }
+.empty { background: var(--surface); border: 1px dashed var(--line); border-radius: var(--r); padding: 28px; text-align: center; display: grid; gap: 10px; justify-items: center; }
+.empty h3 { font-size: 17px; }
+.empty p { margin: 0; color: var(--muted); max-width: 52ch; }
+
+/* follow-ups */
+.fu { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; margin-bottom: 8px; }
+.fu-date { font: 600 13px var(--f-mono); }
+
+/* config */
+.config { max-width: 580px; }
+
+/* modal */
+dialog { border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(660px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); background: var(--surface); color: var(--ink); }
+dialog::backdrop { background: rgb(0 0 0 / .45); }
+.m { padding: 18px; display: grid; gap: 12px; }
+.m-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.m-h h3 { font-size: 20px; overflow-wrap: anywhere; }
+.m-info { font-size: 13px; color: var(--muted); display: grid; gap: 3px; overflow-wrap: anywhere; }
+
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100vw - 32px); z-index: 20; }
+.toast.show { opacity: 1; }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><span class="radar" aria-hidden="true"></span><div><h1>Radar de Leads</h1><small>negócios locais sem site</small></div></div>
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" data-view="buscar" aria-selected="true">Encontrar</button>
+      <button class="tab" role="tab" data-view="funil" aria-selected="false">Funil <span class="count" id="cFunil">0</span></button>
+      <button class="tab" role="tab" data-view="follow" aria-selected="false">Follow-ups <span class="count" id="cFollow">0</span></button>
+      <button class="tab" role="tab" data-view="config" aria-selected="false">Configurações</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <p class="store-note" id="storeNote">Salvando neste navegador.</p>
+
+  <!-- ENCONTRAR -->
+  <section class="view" id="v-buscar">
+    <div class="steps">
+      <div class="panel">
+        <div class="step-h"><span class="step-n">01</span><h2>Abra a busca no mapa</h2></div>
+        <p>Escolha cidade e nicho. Os links abrem o Google Maps e o Instagram já filtrados.</p>
+        <div class="row2">
+          <label class="f">Cidade <input id="cidade" placeholder="Curitiba, PR" autocomplete="off"></label>
+          <label class="f">Nicho <select id="nicho"></select></label>
+        </div>
+        <div class="links">
+          <a class="btn" id="lnkMaps" target="_blank" rel="noopener">Google Maps ↗</a>
+          <a class="btn" id="lnkGoogle" target="_blank" rel="noopener">Google ↗</a>
+          <a class="btn" id="lnkInsta" target="_blank" rel="noopener">Instagram ↗</a>
+        </div>
+        <p>No Maps, selecione a lista de resultados (nome, nota, telefone, endereço) e copie com Ctrl+C.</p>
+      </div>
+
+      <div class="panel">
+        <div class="step-h"><span class="step-n">02</span><h2>Cole e deixe a IA extrair</h2></div>
+        <label class="f">Resultados copiados (Maps, Instagram, planilha, lista do WhatsApp…)
+          <textarea id="colado" rows="9" placeholder="Barbearia do Zé&#10;4,8 (213) · Barbearia · Rua XV de Novembro, 120&#10;Aberto ⋅ Fecha às 19:00 · (41) 99999-1234&#10;&#10;Corte Fino Studio&#10;4,6 (58) · Barbearia · Av. Sete de Setembro, 900&#10;Site · Rotas · (41) 3333-4444"></textarea>
+        </label>
+        <div class="actions">
+          <button class="btn primary" id="btnExtrair">Extrair leads sem site</button>
+          <button class="btn ghost" id="btnExemplo">Usar texto de exemplo</button>
+          <span class="spacer"></span>
+          <button class="btn ghost" id="btnManual">+ Adicionar à mão</button>
+        </div>
+        <div class="status" id="status" role="status"></div>
+        <form id="formManual" class="panel" hidden style="background:var(--sunk);border:0">
+          <div class="row2">
+            <label class="f">Nome do negócio <input id="manNome" required></label>
+            <label class="f">Telefone / WhatsApp <input id="manTel" inputmode="tel"></label>
+          </div>
+          <div class="row2">
+            <label class="f">Instagram <input id="manInsta" placeholder="@perfil"></label>
+            <label class="f">Endereço / bairro <input id="manEnd"></label>
+          </div>
+          <div class="actions"><button class="btn primary" type="submit">Adicionar ao funil</button><button class="btn ghost" type="button" id="manCancel">Cancelar</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div class="results-head" id="resHead" hidden>
+      <h3 id="resInfo"></h3>
+      <div class="actions">
+        <button class="btn" id="btnAddHot">+ Adicionar quentes ao funil</button>
+        <button class="btn ghost" id="btnLimpar">Limpar</button>
+      </div>
+    </div>
+    <div class="grid" id="resultados"></div>
+  </section>
+
+  <!-- FUNIL -->
+  <section class="view" id="v-funil" hidden>
+    <div class="toolbar">
+      <input id="filtro" placeholder="Filtrar por nome, nicho ou cidade" aria-label="Filtrar leads">
+      <button class="btn" id="btnCsv">Exportar CSV</button>
+    </div>
+    <div id="funilEmpty" class="empty" hidden>
+      <h3>Seu funil está vazio</h3>
+      <p>Encontre negócios sem site na aba Encontrar e adicione os melhores aqui. Cada lead entra em "Novo" com sua nota.</p>
+      <button class="btn primary" data-goto="buscar">Encontrar leads</button>
+    </div>
+    <div class="kanban-scroll"><div class="kanban" id="kanban"></div></div>
+  </section>
+
+  <!-- FOLLOW-UPS -->
+  <section class="view" id="v-follow" hidden>
+    <div id="listaFollow"></div>
+  </section>
+
+  <!-- CONFIG -->
+  <section class="view" id="v-config" hidden>
+    <form id="formCfg" class="panel config">
+      <h2 style="font-size:17px">Sua abordagem</h2>
+      <label class="f">Seu nome (assina a mensagem) <input id="cfgNome" placeholder="Pedro"></label>
+      <label class="f">O que você oferece <textarea id="cfgOferta" rows="2" placeholder="Sites profissionais a partir de R$ 497, prontos em 7 dias, com link para WhatsApp e Google Maps."></textarea></label>
+      <label class="f">Dias até o follow-up depois do primeiro contato <input id="cfgDias" type="number" min="1" max="30" value="3"></label>
+      <p>As mensagens são escritas pelo Claude da sua própria conta. Não precisa de chave de API.</p>
+      <div class="actions"><button class="btn primary" type="submit">Salvar</button></div>
+    </form>
+  </section>
+</main>
+
+<dialog id="modal">
+  <div class="m">
+    <div class="m-h"><h3 id="mNome"></h3><button class="btn ghost" id="mFechar" aria-label="Fechar">✕</button></div>
+    <div class="m-info" id="mInfo"></div>
+    <div class="row2">
+      <label class="f">Etapa <select id="mEtapa"></select></label>
+      <label class="f">Próximo follow-up <input type="date" id="mFollow"></label>
+    </div>
+    <label class="f">Telefone / WhatsApp <input id="mTel" inputmode="tel"></label>
+    <label class="f">Anotações <textarea id="mNotas" rows="2"></textarea></label>
+    <label class="f">Mensagem de abordagem <textarea id="mMsg" rows="7"></textarea></label>
+    <div class="actions">
+      <button class="btn" id="mGerar">✨ Escrever com IA</button>
+      <button class="btn" id="mCopiar">Copiar</button>
+      <a class="btn wa" id="mWhats" target="_blank" rel="noopener">Abrir no WhatsApp ↗</a>
+    </div>
+    <div class="actions">
+      <button class="btn danger ghost" id="mExcluir">Excluir lead</button>
+      <span class="spacer"></span>
+      <button class="btn primary" id="mSalvar">Salvar</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+"use strict";
+// ---------------- dados fixos ----------------
+const NICHOS = {
+  barbearia: ["Barbearias", "barbearia", 10], salao: ["Salões de beleza", "salão de beleza", 12],
+  restaurante: ["Restaurantes", "restaurante", 12], lanchonete: ["Lanchonetes e hamburguerias", "hamburgueria", 10],
+  padaria: ["Padarias e confeitarias", "padaria", 8], oficina: ["Oficinas mecânicas", "oficina mecânica", 15],
+  dentista: ["Dentistas", "dentista", 20], clinica: ["Clínicas e consultórios", "clínica", 20],
+  estetica: ["Clínicas de estética", "clínica de estética", 18], academia: ["Academias e studios", "academia", 15],
+  pet: ["Pet shops e veterinários", "pet shop", 12], roupas: ["Lojas de roupas", "loja de roupas", 10],
+  advogado: ["Advogados", "advogado", 20], contador: ["Contadores", "contabilidade", 18],
+  imobiliaria: ["Imobiliárias", "imobiliária", 18], eletricista: ["Eletricistas e reformas", "eletricista", 14],
+};
+const ETAPAS = [["novo", "Novo"], ["contatado", "Contatado"], ["negociando", "Negociando"], ["fechado", "Fechado"], ["perdido", "Perdido"]];
+const EXEMPLO = `Barbearia do Zé
+4,8 (213) · Barbearia · Rua XV de Novembro, 120 - Centro
+Aberto ⋅ Fecha às 19:00 · (41) 99812-4471
+@barbeariadoze
+
+Corte Fino Studio
+4,6 (58) · Barbearia · Av. Sete de Setembro, 900
+Site · Rotas · (41) 3333-4444 · cortefino.com.br
+
+Navalha de Ouro
+4,9 (12) · Barbearia · R. Mateus Leme, 455 - São Francisco
+Fecha às 20:00 · (41) 98877-1020
+
+Studio Black Barber
+5,0 (4) · Barbearia · Bairro Água Verde`;
+
+// ---------------- utilidades ----------------
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const hoje = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+const somarDias = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+const br = (iso) => iso ? iso.split("-").reverse().join("/") : "";
+const novoId = () => "l" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2600); }
+const ls = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+
+function numeroWhats(tel) {
+  let d = String(tel || "").split(/[;,/]/)[0].replace(/\D/g, "");
+  if (!d) return "";
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("0")) d = d.slice(1);
+  if (!d.startsWith("55") && d.length <= 11) d = "55" + d;
+  return d.length >= 12 ? d : "";
+}
+const celular = (tel) => { const d = String(tel || "").replace(/\D/g, "").replace(/^55/, ""); return d.length === 11 && d[2] === "9"; };
+
+// ---------------- pontuação 0–100 ----------------
+function pontuar(l) {
+  let s = 0; const m = [];
+  const add = (p, t) => { s += p; m.push(`+${p} ${t}`); };
+  if (celular(l.telefone)) add(30, "celular (provável WhatsApp)");
+  else if (l.telefone) add(22, "tem telefone");
+  if (l.instagram) add(12, "ativo no Instagram, sem site");
+  const n = Number(l.avaliacoes) || 0;
+  if (n >= 100) add(18, `${n} avaliações (negócio movimentado)`);
+  else if (n >= 30) add(12, `${n} avaliações`);
+  else if (n >= 5) add(6, `${n} avaliações`);
+  if (Number(l.nota) >= 4.5) add(6, `nota ${l.nota}`);
+  if (l.endereco) add(6, "endereço conhecido");
+  add(NICHOS[l.nicho]?.[2] ?? 10, "valor do nicho");
+  s = Math.min(100, s);
+  return { score: s, motivos: m };
+}
+const temp = (s) => s >= 65 ? ["Quente", "hot"] : s >= 40 ? ["Morno", "warm"] : ["Frio", "cold"];
+const pill = (s) => { const [t, c] = temp(s); return `<span class="score ${c}" title="${t}">${s} · ${t}</span>`; };
+
+// ---------------- estado + persistência ----------------
+let leads = {};            // id -> lead
+let cfg = { nome: "", oferta: "", dias: 3 };
+let resultados = [];       // extraídos, ainda não no funil
+let col = null;            // coleção privada no db (quando disponível)
+
+function carregarLocal() { leads = ls.get("radar.leads", {}); cfg = { ...cfg, ...ls.get("radar.cfg", {}) }; }
+async function salvarLead(l) {
+  leads[l.id] = l; renderTudo();
+  if (col) { try { await col.doc(l.id).set(l); } catch (e) { toast("Não foi possível salvar na nuvem: " + (e.code || "erro")); } }
+  else ls.set("radar.leads", leads);
+}
+async function removerLead(id) {
+  delete leads[id]; renderTudo();
+  if (col) { try { await col.doc(id).delete(); } catch {} } else ls.set("radar.leads", leads);
+}
+async function salvarCfg() {
+  if (col) { try { await col.doc("config").set({ ...cfg, tipo: "config" }); } catch {} } else ls.set("radar.cfg", cfg);
+}
+
+async function conectarNuvem() {
+  if (!window.claude?.use) return;
+  try {
+    const [db, user] = await Promise.all([claude.use("db"), claude.use("user")]);
+    const uid = user && await user.id();
+    if (!db || !uid) return;
+    col = db.collection("data/users/" + uid);
+    const locais = Object.values(leads);
+    let primeira = true;
+    const timer = setTimeout(() => { $("#storeNote").textContent = "A nuvem está demorando. Seus dados continuam neste navegador."; }, 10000);
+    col.onSnapshot((snap) => {
+      clearTimeout(timer);
+      const novo = {};
+      snap.docs.forEach((d) => { const v = d.data(); if (!v) return; if (d.id === "config") cfg = { ...cfg, ...v }; else if (v.tipo === "lead") novo[d.id] = v; });
+      if (primeira) {
+        primeira = false;
+        // leva para a nuvem o que existia só neste navegador
+        locais.filter((l) => !novo[l.id]).forEach((l) => { novo[l.id] = l; col.doc(l.id).set(l).catch(() => {}); });
+      }
+      leads = novo;
+      $("#storeNote").textContent = "Salvo na sua conta Claude. Só você vê estes leads.";
+      preencherCfg(); renderTudo();
+    }, () => { clearTimeout(timer); col = null; $("#storeNote").textContent = "Salvando neste navegador (nuvem indisponível)."; });
+  } catch {}
+}
+
+// ---------------- navegação ----------------
+let viewAtual = "buscar";
+function mostrar(v) {
+  viewAtual = v;
+  document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === v)));
+  document.querySelectorAll(".view").forEach((s) => { s.hidden = s.id !== "v-" + v; });
+  renderTudo();
+}
+document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => mostrar(b.dataset.view)));
+document.addEventListener("click", (e) => { const g = e.target.closest("[data-goto]"); if (g) mostrar(g.dataset.goto); });
+
+// ---------------- passo 1: links de busca ----------------
+$("#nicho").innerHTML = Object.entries(NICHOS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join("");
+$("#cidade").value = ls.get("radar.cidade", "");
+$("#nicho").value = ls.get("radar.nicho", "barbearia");
+function atualizarLinks() {
+  const cidade = $("#cidade").value.trim() || "minha cidade";
+  const termo = NICHOS[$("#nicho").value][1];
+  const q = encodeURIComponent(`${termo} em ${cidade}`);
+  $("#lnkMaps").href = `https://www.google.com/maps/search/${q}`;
+  $("#lnkGoogle").href = `https://www.google.com/search?q=${q}&tbm=lcl`;
+  $("#lnkInsta").href = `https://www.google.com/search?q=${encodeURIComponent(`site:instagram.com ${termo} ${cidade} whatsapp`)}`;
+  ls.set("radar.cidade", $("#cidade").value.trim()); ls.set("radar.nicho", $("#nicho").value);
+}
+$("#cidade").addEventListener("input", atualizarLinks); $("#nicho").addEventListener("change", atualizarLinks);
+atualizarLinks();
+
+// ---------------- passo 2: extração com IA ----------------
+$("#btnExemplo").addEventListener("click", () => { $("#colado").value = EXEMPLO; $("#cidade").value ||= "Curitiba, PR"; atualizarLinks(); $("#colado").focus(); });
+
+let samplePromise = null;
+const getSample = () => (samplePromise ||= (window.claude?.use ? claude.use("sample") : Promise.resolve(null)));
+const erroIA = (c) => ({ not_granted: "Você não permitiu o uso do Claude nesta página.", rate_limited: "Muitas chamadas seguidas. Espere um pouco e tente de novo.",
+  sampling_disabled: "O Claude não está disponível nesta conta.", invalid_json: "A IA respondeu fora do formato. Tente de novo.",
+  prompt_too_large: "Texto grande demais. Cole menos resultados por vez.", session_expired: "Sua sessão expirou. Entre de novo no Claude." }[c] || "A IA não respondeu. Tente de novo.");
+
+$("#btnExtrair").addEventListener("click", async () => {
+  const texto = $("#colado").value.trim();
+  const st = $("#status"); st.classList.remove("err");
+  if (texto.length < 10) { st.textContent = "Cole primeiro os resultados copiados do mapa."; st.classList.add("err"); return; }
+  const sample = await getSample();
+  if (!sample) { st.textContent = "A IA só funciona com esta página aberta no Claude. Use \"Adicionar à mão\"."; st.classList.add("err"); return; }
+  const btn = $("#btnExtrair"); btn.disabled = true; st.textContent = "Analisando os resultados…";
+  const nicho = $("#nicho").value, cidade = $("#cidade").value.trim();
+  try {
+    const out = await sample.json(
+      `Extraia os negócios locais do texto abaixo (copiado de resultados do Google Maps, Instagram ou de uma lista).\n` +
+      `Responda só com um array JSON. Cada item: {"nome": string, "telefone": string|null, "instagram": string|null, "endereco": string|null, ` +
+      `"nota": number|null, "avaliacoes": number|null, "tem_site": boolean, "categoria": string|null}.\n` +
+      `Regras: use somente o que está no texto, nunca invente dados. "tem_site" é true se aparecer um domínio (ex.: algo.com.br) ou a palavra "Site"/"Website" ligada ao negócio; senão false. ` +
+      `"avaliacoes" é o número entre parênteses depois da nota. Ignore anúncios e textos de interface.\n` +
+      `Contexto: nicho "${NICHOS[nicho][0]}", cidade "${cidade || "não informada"}".\n\nTEXTO:\n${texto.slice(0, 40000)}`,
+      { modelTier: "default", effort: "low" });
+    if (!Array.isArray(out)) throw { code: "invalid_json" };
+    const validos = out.filter((x) => x && typeof x.nome === "string" && x.nome.trim());
+    const semSite = validos.filter((x) => !x.tem_site);
+    resultados = semSite.map((x) => {
+      const l = { id: novoId(), tipo: "lead", nome: x.nome.trim(), telefone: x.telefone || "", instagram: x.instagram || "", endereco: x.endereco || "",
+        nota: Number(x.nota) || null, avaliacoes: Number(x.avaliacoes) || null, nicho, cidade };
+      return { ...l, ...pontuar(l) };
+    }).sort((a, b) => b.score - a.score);
+    const descartados = validos.length - semSite.length;
+    st.textContent = `${validos.length} negócios lidos · ${semSite.length} sem site` + (descartados ? ` · ${descartados} já têm site (descartados)` : "");
+    renderResultados();
+    $("#resHead").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    st.textContent = erroIA(e?.code); st.classList.add("err");
+  } finally { btn.disabled = false; }
+});
+
+function jaNoFunil(l) { const k = (l.nome + "|" + (l.telefone || "")).toLowerCase(); return Object.values(leads).some((x) => (x.nome + "|" + (x.telefone || "")).toLowerCase() === k); }
+function renderResultados() {
+  $("#resHead").hidden = !resultados.length;
+  $("#resInfo").textContent = `${resultados.length} leads sem site, do mais quente ao mais frio`;
+  $("#resultados").innerHTML = resultados.map((l) => {
+    const dentro = jaNoFunil(l);
+    return `<article class="lead">
+      <div class="lead-h"><h4>${esc(l.nome)}</h4>${pill(l.score)}</div>
+      <div class="meta">${l.telefone ? `<span>☎ ${esc(l.telefone)}</span>` : ""}${l.instagram ? `<span>◎ ${esc(l.instagram)}</span>` : ""}
+        ${l.endereco ? `<span>⌖ ${esc(l.endereco)}</span>` : ""}${l.nota ? `<span>★ ${l.nota}${l.avaliacoes ? ` (${l.avaliacoes} avaliações)` : ""}</span>` : ""}</div>
+      <div class="why">${esc(l.motivos.join(" · "))}</div>
+      <div class="lead-f">
+        <a class="btn ghost sm" target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent(l.nome + " " + l.cidade)}">Conferir no Google ↗</a>
+        <button class="btn sm ${dentro ? "" : "primary"}" data-add="${l.id}" ${dentro ? "disabled" : ""}>${dentro ? "No funil" : "+ Funil"}</button>
+      </div></article>`;
+  }).join("");
+}
+function adicionar(l) {
+  if (jaNoFunil(l)) return false;
+  salvarLead({ ...l, etapa: "novo", notas: "", mensagem: "", followup: "", criadoEm: hoje() });
+  return true;
+}
+$("#resultados").addEventListener("click", (e) => {
+  const id = e.target.closest("[data-add]")?.dataset.add; if (!id) return;
+  adicionar(resultados.find((r) => r.id === id)); renderResultados(); toast("Lead adicionado ao funil");
+});
+$("#btnAddHot").addEventListener("click", () => {
+  const n = resultados.filter((l) => l.score >= 65).filter(adicionar).length;
+  renderResultados(); toast(n ? `${n} leads quentes no funil` : "Nenhum lead quente novo");
+});
+$("#btnLimpar").addEventListener("click", () => { resultados = []; renderResultados(); $("#status").textContent = ""; });
+
+// adicionar à mão
+$("#btnManual").addEventListener("click", () => { $("#formManual").hidden = false; $("#manNome").focus(); });
+$("#manCancel").addEventListener("click", () => { $("#formManual").hidden = true; });
+$("#formManual").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const l = { id: novoId(), tipo: "lead", nome: $("#manNome").value.trim(), telefone: $("#manTel").value.trim(), instagram: $("#manInsta").value.trim(),
+    endereco: $("#manEnd").value.trim(), nota: null, avaliacoes: null, nicho: $("#nicho").value, cidade: $("#cidade").value.trim() };
+  if (!l.nome) return;
+  if (!adicionar({ ...l, ...pontuar(l) })) { toast("Esse lead já está no funil"); return; }
+  e.target.reset(); e.target.hidden = true; toast("Lead adicionado ao funil");
+});
+
+// ---------------- funil ----------------
+function moverEtapa(l, etapa) {
+  if (l.etapa === etapa) return;
+  l.etapa = etapa;
+  if (etapa === "contatado" || etapa === "negociando") l.followup = somarDias(hoje(), Number(cfg.dias) || 3);
+  if (etapa === "fechado" || etapa === "perdido") l.followup = "";
+}
+const ativo = (l) => !["fechado", "perdido"].includes(l.etapa);
+function renderKanban() {
+  const todos = Object.values(leads);
+  $("#funilEmpty").hidden = todos.length > 0;
+  $(".kanban-scroll").hidden = !todos.length;
+  const f = $("#filtro").value.trim().toLowerCase(), h = hoje();
+  const vis = todos.filter((l) => !f || `${l.nome} ${l.cidade} ${NICHOS[l.nicho]?.[0]}`.toLowerCase().includes(f));
+  $("#kanban").innerHTML = ETAPAS.map(([id, nome]) => {
+    const it = vis.filter((l) => l.etapa === id).sort((a, b) => b.score - a.score);
+    return `<div class="col" data-etapa="${id}"><div class="col-h"><h3>${nome}</h3><span class="count">${it.length}</span></div>
+      ${it.length ? it.map((l) => {
+        const atras = l.followup && l.followup <= h && ativo(l);
+        return `<button class="kcard" draggable="true" data-id="${l.id}"><span class="t">${esc(l.nome)}</span>
+          <span class="s">${pill(l.score)}<span>${esc(NICHOS[l.nicho]?.[0] || "")}${l.cidade ? " · " + esc(l.cidade) : ""}</span>
+          ${l.followup ? `<span class="${atras ? "due" : ""}">⏰ ${br(l.followup)}</span>` : ""}</span></button>`;
+      }).join("") : `<div class="empty-col">Arraste um lead para cá</div>`}</div>`;
+  }).join("");
+}
+$("#filtro").addEventListener("input", renderKanban);
+let arrast = null;
+const kb = $("#kanban");
+kb.addEventListener("dragstart", (e) => { arrast = e.target.closest(".kcard")?.dataset.id; });
+kb.addEventListener("dragover", (e) => { const c = e.target.closest(".col"); if (c) { e.preventDefault(); c.classList.add("over"); } });
+kb.addEventListener("dragleave", (e) => e.target.closest(".col")?.classList.remove("over"));
+kb.addEventListener("drop", (e) => {
+  const c = e.target.closest(".col"); if (!c || !arrast) return; e.preventDefault();
+  const l = leads[arrast]; arrast = null; if (!l) return;
+  moverEtapa(l, c.dataset.etapa); salvarLead(l);
+});
+kb.addEventListener("click", (e) => { const id = e.target.closest(".kcard")?.dataset.id; if (id) abrir(id); });
+
+$("#btnCsv").addEventListener("click", async () => {
+  const cols = ["nome", "nicho", "cidade", "telefone", "instagram", "endereco", "nota", "avaliacoes", "score", "etapa", "followup", "notas"];
+  const csv = "﻿" + [cols.join(";"), ...Object.values(leads).map((l) => cols.map((c) => `"${String(c === "nicho" ? NICHOS[l.nicho]?.[0] ?? "" : l[c] ?? "").replace(/"/g, '""')}"`).join(";"))].join("\n");
+  const dl = window.claude?.use ? await claude.use("downloads") : null;
+  if (!dl) { toast("Download indisponível aqui"); return; }
+  try { await dl.save({ filename: `leads-${hoje()}.csv`, data: csv }); } catch (e) { if (e?.code !== "declined") toast("Download cancelado"); }
+});
+
+// ---------------- follow-ups ----------------
+const pendentes = () => Object.values(leads).filter((l) => l.followup && l.followup <= hoje() && ativo(l));
+function renderFollow() {
+  const h = hoje();
+  const lista = Object.values(leads).filter((l) => l.followup && ativo(l)).sort((a, b) => a.followup.localeCompare(b.followup));
+  $("#listaFollow").innerHTML = lista.length ? lista.map((l) => {
+    const quando = l.followup < h ? "Atrasado desde " + br(l.followup) : l.followup === h ? "Hoje" : br(l.followup);
+    return `<div class="fu"><div><strong>${esc(l.nome)}</strong> <span class="muted">· ${ETAPAS.find((e) => e[0] === l.etapa)?.[1]}</span><br>
+      <span class="fu-date ${l.followup <= h ? "due" : "muted"}">⏰ ${quando}</span></div>
+      <div class="actions"><button class="btn sm" data-adiar="${l.id}">Adiar 2 dias</button><button class="btn sm primary" data-abrir="${l.id}">Abrir</button></div></div>`;
+  }).join("") : `<div class="empty"><h3>Nenhum retorno agendado</h3><p>Quando você marca um lead como Contatado, o retorno é agendado sozinho para daqui a ${Number(cfg.dias) || 3} dias.</p></div>`;
+}
+$("#listaFollow").addEventListener("click", (e) => {
+  const a = e.target.closest("[data-abrir]")?.dataset.abrir, d = e.target.closest("[data-adiar]")?.dataset.adiar;
+  if (a) abrir(a);
+  if (d && leads[d]) { leads[d].followup = somarDias(hoje(), 2); salvarLead(leads[d]); toast("Adiado 2 dias"); }
+});
+
+function renderContadores() {
+  $("#cFunil").textContent = Object.keys(leads).length;
+  const n = pendentes().length;
+  $("#cFollow").textContent = n; $("#cFollow").classList.toggle("alert", n > 0);
+}
+function renderTudo() {
+  renderContadores();
+  if (viewAtual === "funil") renderKanban();
+  if (viewAtual === "follow") renderFollow();
+  if (viewAtual === "buscar" && resultados.length) renderResultados();
+}
+
+// ---------------- modal ----------------
+let atual = null, confirmarExcluir = false;
+$("#mEtapa").innerHTML = ETAPAS.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
+function abrir(id) {
+  const l = leads[id]; if (!l) return;
+  atual = { ...l }; confirmarExcluir = false; $("#mExcluir").textContent = "Excluir lead";
+  $("#mNome").textContent = l.nome;
+  $("#mInfo").innerHTML = `<span>${pill(l.score)} ${esc(NICHOS[l.nicho]?.[0] || "")}${l.cidade ? " · " + esc(l.cidade) : ""}</span>
+    ${l.instagram ? `<span>◎ ${esc(l.instagram)}</span>` : ""}${l.endereco ? `<span>⌖ ${esc(l.endereco)}</span>` : ""}
+    ${l.nota ? `<span>★ ${l.nota}${l.avaliacoes ? ` (${l.avaliacoes} avaliações)` : ""}</span>` : ""}<span>${esc((l.motivos || []).join(" · "))}</span>`;
+  $("#mEtapa").value = l.etapa; $("#mFollow").value = l.followup || ""; $("#mTel").value = l.telefone || "";
+  $("#mNotas").value = l.notas || ""; $("#mMsg").value = l.mensagem || "";
+  atualizarWhats(); $("#modal").showModal();
+}
+function atualizarWhats() {
+  const n = numeroWhats($("#mTel").value), a = $("#mWhats");
+  a.setAttribute("aria-disabled", String(!n));
+  a.href = n ? `https://wa.me/${n}?text=${encodeURIComponent($("#mMsg").value)}` : "#";
+  a.title = n ? "" : "Informe um telefone para abrir o WhatsApp";
+}
+["#mMsg", "#mTel"].forEach((s) => $(s).addEventListener("input", atualizarWhats));
+$("#mEtapa").addEventListener("change", () => { moverEtapa(atual, $("#mEtapa").value); $("#mFollow").value = atual.followup || ""; });
+function coletar() {
+  Object.assign(atual, { etapa: $("#mEtapa").value, followup: $("#mFollow").value, telefone: $("#mTel").value.trim(), notas: $("#mNotas").value, mensagem: $("#mMsg").value });
+  Object.assign(atual, pontuar(atual));
+}
+$("#mSalvar").addEventListener("click", () => { coletar(); salvarLead(atual); $("#modal").close(); toast("Lead salvo"); });
+$("#mFechar").addEventListener("click", () => $("#modal").close());
+$("#mExcluir").addEventListener("click", () => {
+  if (!confirmarExcluir) { confirmarExcluir = true; $("#mExcluir").textContent = "Clique de novo para excluir"; return; }
+  removerLead(atual.id); $("#modal").close(); toast("Lead excluído");
+});
+$("#mCopiar").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("#mMsg").value); toast("Mensagem copiada"); }
+  catch { $("#mMsg").select(); toast("Texto selecionado: use Ctrl+C"); }
+});
+$("#mWhats").addEventListener("click", () => {
+  coletar();
+  if (atual.etapa === "novo") { moverEtapa(atual, "contatado"); $("#mEtapa").value = "contatado"; $("#mFollow").value = atual.followup; toast(`Marcado como Contatado · retorno em ${br(atual.followup)}`); }
+  salvarLead({ ...atual });
+});
+
+function mensagemPronta(l) {
+  const termo = NICHOS[l.nicho]?.[1] || "negócio";
+  const quem = cfg.nome ? `Aqui é ${cfg.nome}.` : "Tudo bem?";
+  const gancho = l.avaliacoes >= 30 ? `Vi que vocês têm ${l.avaliacoes} avaliações no Google, muito bom! Mas` : l.instagram ? "Vi o Instagram de vocês, mas" : "Procurei vocês no Google e";
+  return `Olá, ${l.nome}! ${quem} ${gancho} não encontrei um site.\n\nQuem procura ${termo}${l.cidade ? " em " + l.cidade.split(",")[0] : ""} costuma pesquisar no Google antes de escolher, e um site simples ajuda a aparecer e passar confiança.\n\n${cfg.oferta || "Eu crio sites rápidos e acessíveis para negócios locais."} Posso te mostrar um exemplo de como ficaria o de vocês, sem compromisso?`;
+}
+let gerando = null;
+$("#mGerar").addEventListener("click", async () => {
+  const btn = $("#mGerar"), box = $("#mMsg");
+  if (gerando) { gerando.abort(); return; }
+  coletar();
+  const sample = await getSample();
+  if (!sample) { box.value = mensagemPronta(atual); atualizarWhats(); toast("IA indisponível aqui: usei um modelo pronto"); return; }
+  gerando = new AbortController(); btn.textContent = "Parar"; const antes = box.value; box.value = "Escrevendo…";
+  const dados = { negocio: atual.nome, nicho: NICHOS[atual.nicho]?.[0], cidade: atual.cidade || null, instagram: atual.instagram || null,
+    nota_google: atual.nota, avaliacoes_google: atual.avaliacoes, endereco: atual.endereco || null, anotacoes: atual.notas || null };
+  try {
+    const { text } = await sample(
+      `Escreva a primeira mensagem de WhatsApp de um profissional que cria sites para um negócio local brasileiro que ainda não tem site.\n` +
+      `Português do Brasil, tom cordial e direto, no máximo 80 palavras, no máximo um emoji, sem promessas exageradas. ` +
+      `Use um detalhe real dos dados (avaliações, Instagram, bairro ou nicho), mostre um benefício concreto para esse tipo de negócio e termine com uma pergunta simples. ` +
+      `Responda só com o texto da mensagem.\n\nRemetente: ${cfg.nome || "(sem nome; não assine)"}\nOferta: ${cfg.oferta || "criação de sites para negócios locais"}\nDados: ${JSON.stringify(dados)}`,
+      { modelTier: "quick", cache: false, signal: gerando.signal, onText: ({ text }) => { box.value = text; } });
+    box.value = text.trim();
+  } catch (e) {
+    if (e?.code === "cancelled") box.value = e.text || antes;
+    else { box.value = mensagemPronta(atual); toast(erroIA(e?.code) + " Usei um modelo pronto."); }
+  } finally { gerando = null; btn.textContent = "✨ Escrever com IA"; atualizarWhats(); }
+});
+
+// ---------------- configurações ----------------
+function preencherCfg() { $("#cfgNome").value = cfg.nome || ""; $("#cfgOferta").value = cfg.oferta || ""; $("#cfgDias").value = cfg.dias || 3; }
+$("#formCfg").addEventListener("submit", (e) => {
+  e.preventDefault();
+  cfg = { nome: $("#cfgNome").value.trim(), oferta: $("#cfgOferta").value.trim(), dias: Math.max(1, Number($("#cfgDias").value) || 3) };
+  salvarCfg(); toast("Configurações salvas");
+});
+
+// ---------------- início ----------------
+carregarLocal(); preencherCfg(); renderTudo();
+if (pendentes().length) toast(`⏰ ${pendentes().length} lead(s) esperando retorno hoje`);
+conectarNuvem();
+})();
+</script>
