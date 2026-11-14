@@ -1,0 +1,17 @@
+{
+  "name": "radar-de-leads",
+  "version": "1.0.0",
+  "description": "Encontra negócios no Google Maps, descobre WhatsApp, e-mail, Instagram e site, e destaca quem não tem site.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "setup": "npm install && npx playwright install chromium",
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.2.0",
+    "playwright": "1.63.0"
+  }
+}

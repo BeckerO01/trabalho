@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Radar de Leads</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="side" id="side">
+      <a class="brand" href="#inicio"><span class="radar" aria-hidden="true"></span><span><strong>Radar de Leads</strong><small>do Google Maps</small></span></a>
+      <nav>
+        <p class="nav-h">Visão geral</p>
+        <a href="#inicio" data-nav="inicio">Início</a>
+        <p class="nav-h">Prospecção</p>
+        <a href="#nova" data-nav="nova">+ Nova busca</a>
+        <a href="#buscas" data-nav="buscas">Buscas <span class="badge" id="bBuscas"></span></a>
+        <a href="#leads" data-nav="leads">Leads <span class="badge" id="bLeads"></span></a>
+        <a href="#funil" data-nav="funil">Funil de vendas</a>
+        <a href="#followups" data-nav="followups">Follow-ups <span class="badge alert" id="bFollow"></span></a>
+        <p class="nav-h">Ajustes</p>
+        <a href="#config" data-nav="config">Configurações</a>
+      </nav>
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <button class="btn ghost menu" id="btnMenu" aria-label="Abrir menu">☰</button>
+        <div class="crumbs" id="crumbs"></div>
+        <input id="busca-global" class="global" placeholder="Buscar lead pelo nome… (Enter)" aria-label="Buscar lead pelo nome">
+        <a class="btn primary" href="#nova">+ Nova busca</a>
+      </header>
+      <main id="view"></main>
+    </div>
+  </div>
+
+  <aside class="drawer" id="drawer" hidden aria-label="Detalhes do lead"></aside>
+  <div class="toast" id="toast" role="status"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
