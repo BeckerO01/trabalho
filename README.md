@@ -36,5 +36,10 @@ Tudo fica em `data/db.json`, só no seu computador. O servidor só aceita conex�
 - Ler o Maps automaticamente vai contra os termos de uso do Google. Use com moderação (o app já espera entre uma empresa e outra) e por sua conta.
 - `RADAR_HEADFUL=1 npm start` mostra o navegador trabalhando.
 
-## Versão no Claude
-`artifact/radar-de-leads.html` é uma versão mais simples que roda como artefato dentro do Claude (sem busca automática: você cola os resultados do Maps).
+## Enviar para o Claude (usar no celular)
+1. No programa, filtre os leads e clique em **Enviar ao Claude**: os leads são copiados e um arquivo `radar-leads-AAAA-MM-DD.json` é baixado.
+2. O Radar no Claude abre (https://claude.ai/artifact/ERs5tuq5h5d897HRbZSsLp). Em **Importar do PC**, cole (Ctrl+V) ou escolha o arquivo.
+3. Os leads ficam salvos na sua conta Claude: abra o mesmo link no celular, gere a mensagem com IA (sem chave de API) e mande pelo WhatsApp.
+
+Importar de novo atualiza os dados (telefone, site, nota) sem apagar etapa, anotações e mensagens.
+O código do artefato está em `artifact/radar-de-leads.html`.

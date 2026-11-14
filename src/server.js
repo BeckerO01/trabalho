@@ -168,6 +168,18 @@ async function api(req, res, url) {
     }
   }
 
+  if (recurso === "export.json" && m === "GET") {
+    // pacote para importar no Radar de Leads do Claude
+    const ids = url.searchParams.get("ids");
+    const lista = (ids ? ids.split(",").map((i) => db.leads[i]) : Object.values(db.leads)).filter((l) => l && !l.descartado).slice(0, 500);
+    const campos = ["id", "nome", "categoria", "endereco", "telefone", "whatsapp", "whatsappFonte", "email", "instagram", "facebook", "site", "siteTipo", "nota", "avaliacoes", "mapsUrl", "score", "motivos", "etapa", "followup", "notas"];
+    const cidadeDe = (l) => (String(l.endereco).match(/,\s*([^,\-]+?)\s*-\s*[A-Z]{2}\b/) || [])[1] || "";
+    return json(res, 200, {
+      formato: "radar-leads", versao: 1, exportadoEm: new Date().toISOString(),
+      leads: lista.map((l) => ({ ...Object.fromEntries(campos.map((c) => [c, l[c] ?? null])), cidade: cidadeDe(l) })),
+    });
+  }
+
   if (recurso === "export.csv" && m === "GET") {
     const ids = url.searchParams.get("ids");
     const lista = ids ? ids.split(",").map((i) => db.leads[i]).filter(Boolean) : Object.values(db.leads);

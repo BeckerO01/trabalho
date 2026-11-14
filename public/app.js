@@ -68,7 +68,8 @@ function tabelaLeads(lista, idTabela) {
       <select data-f="etapa" aria-label="Etapa"><option value="">Todos os status</option>${ETAPAS.map(([v, n]) => `<option value="${v}" ${filtro.etapa === v ? "selected" : ""}>${n}</option>`).join("")}</select>
       <select data-f="categoria" aria-label="Categoria"><option value="">Todas as categorias</option>${cats.map((c) => `<option ${filtro.categoria === c ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
       ${chip("semSite", "Sem site")} ${chip("wa", "Com WhatsApp")} ${chip("nota4", "★ 4+")} ${chip("ocultarDesc", "Ocultar descartados")}
-      <span class="spacer"></span><a class="btn sm" href="/api/export.csv?ids=${vis.map((l) => l.id).join(",")}">Exportar ${vis.length}</a>
+      <span class="spacer"></span><a class="btn sm" href="/api/export.csv?ids=${vis.map((l) => l.id).join(",")}">CSV</a>
+      <button class="btn sm primary" data-enviar="${vis.filter((l) => !l.descartado).map((l) => l.id).join(",")}">Enviar ${vis.filter((l) => !l.descartado).length} ao Claude</button>
     </div>
     ${vis.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Empresa</th><th>Local</th><th>Telefone</th><th>Canais</th><th><button data-ordem="nota">Nota ${filtro.ordem === "nota" ? "↓" : ""}</button></th><th><button data-ordem="score">Score ${filtro.ordem === "score" ? "↓" : ""}</button></th><th>Status</th></tr></thead>
@@ -244,6 +245,8 @@ document.addEventListener("click", async (e) => {
     } catch (err) { toast(err.message); }
     return;
   }
+  const env = e.target.closest("[data-enviar]");
+  if (env) { enviarAoClaude(env.dataset.enviar); return; }
   const ad = e.target.closest("[data-adiar]");
   if (ad) { const d = new Date(Date.now() + 2 * 864e5); await salvarLead(ad.dataset.adiar, { followup: d.toISOString().slice(0, 10) }); toast("Adiado 2 dias"); }
   if (e.target.id === "rmChave") { S.config = await api("PUT", "config", { removerChave: true }); $("#view").dataset.v = ""; render(); toast("Chave removida"); }
@@ -263,6 +266,22 @@ document.addEventListener("submit", async (e) => {
     S.config = await api("PUT", "config", f); $("#view").dataset.v = ""; render(); toast("Configurações salvas");
   }
 });
+
+// ---------- enviar ao Radar no Claude ----------
+const URL_CLAUDE = "https://claude.ai/artifact/ERs5tuq5h5d897HRbZSsLp";
+async function enviarAoClaude(ids) {
+  if (!ids) { toast("Nenhum lead para enviar"); return; }
+  const pacote = await api("GET", "export.json?ids=" + ids);
+  const texto = JSON.stringify(pacote);
+  let copiado = false;
+  try { await navigator.clipboard.writeText(texto); copiado = true; } catch {}
+  // também baixa o arquivo, para quem preferir importar por arquivo (ou pelo celular)
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([texto], { type: "application/json" }));
+  a.download = `radar-leads-${S.hoje}.json`; a.click(); URL.revokeObjectURL(a.href);
+  toast(`${pacote.leads.length} leads ${copiado ? "copiados" : "salvos em arquivo"}. No Radar do Claude, clique em Importar do PC e cole (Ctrl+V).`);
+  window.open(URL_CLAUDE, "_blank", "noopener");
+}
 
 // funil: arrastar e soltar
 let arrastando = null;

@@ -64,6 +64,15 @@ label.f { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font
 input, select, textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; width: 100%; min-width: 0; font-weight: 400; }
 textarea { resize: vertical; }
 
+/* importação */
+.import { border-color: var(--accent); }
+.import code { font-family: var(--f-mono); font-size: 12px; }
+.ou { text-align: center; color: var(--muted); font-size: 13px; margin: 18px 0 12px; }
+.tag-sem { font: 600 10px var(--f-mono); letter-spacing: .05em; text-transform: uppercase; color: var(--hot); }
+.chs { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.ch { font: 600 10px/1 var(--f-mono); padding: 4px 6px; border-radius: 6px; background: var(--sunk); color: var(--muted); }
+.ch.on { background: var(--accent-soft); color: var(--ink); }
+
 /* busca */
 .steps { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 16px; align-items: start; }
 @media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
@@ -149,6 +158,18 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
 
   <!-- ENCONTRAR -->
   <section class="view" id="v-buscar">
+    <div class="panel import">
+      <div class="step-h"><span class="step-n">PC</span><h2>Importar do Radar no PC</h2></div>
+      <p>No programa do computador, clique em <b>Enviar ao Claude</b>. Depois cole aqui (Ctrl+V) ou escolha o arquivo <code>radar-leads.json</code> que foi baixado. Os leads ficam salvos na sua conta e aparecem também no celular.</p>
+      <textarea id="importTxt" rows="3" placeholder='Cole aqui o código copiado do programa ({"formato":"radar-leads", …})'></textarea>
+      <div class="actions">
+        <button class="btn primary" id="btnImport">Importar leads</button>
+        <label class="btn" for="importFile">Escolher arquivo .json</label>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+      </div>
+      <div class="status" id="importStatus" role="status"></div>
+    </div>
+    <p class="ou">ou encontre leads sem o programa:</p>
     <div class="steps">
       <div class="panel">
         <div class="step-h"><span class="step-n">01</span><h2>Abra a busca no mapa</h2></div>
@@ -209,7 +230,7 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
     </div>
     <div id="funilEmpty" class="empty" hidden>
       <h3>Seu funil está vazio</h3>
-      <p>Encontre negócios sem site na aba Encontrar e adicione os melhores aqui. Cada lead entra em "Novo" com sua nota.</p>
+      <p>Importe os leads do programa no PC (botão "Enviar ao Claude") ou encontre negócios na aba Encontrar. Cada lead entra em "Novo" com sua nota.</p>
       <button class="btn primary" data-goto="buscar">Encontrar leads</button>
     </div>
     <div class="kanban-scroll"><div class="kanban" id="kanban"></div></div>
@@ -329,6 +350,11 @@ function pontuar(l) {
 }
 const temp = (s) => s >= 65 ? ["Quente", "hot"] : s >= 40 ? ["Morno", "warm"] : ["Frio", "cold"];
 const pill = (s) => { const [t, c] = temp(s); return `<span class="score ${c}" title="${t}">${s} · ${t}</span>`; };
+const rotulo = (l) => l.categoria || NICHOS[l.nicho]?.[0] || "";
+const semSiteTag = (l) => l.siteTipo === "nenhum" ? '<span class="tag-sem">sem site</span>' : l.siteTipo === "rede_social" ? '<span class="tag-sem">só rede social</span>' : "";
+const canais = (l) => `<span class="chs"><span class="ch ${l.whatsapp ? "on" : ""}">WA</span><span class="ch ${l.email ? "on" : ""}">EMAIL</span><span class="ch ${l.instagram ? "on" : ""}">IG</span></span>`;
+const telBR = (t) => { const d = String(t || "").replace(/\D/g, "").replace(/^55/, ""); return d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : t || ""; };
+const linkSeguro = (u) => /^https:\/\//i.test(String(u || "")) ? String(u) : "";
 
 // ---------------- estado + persistência ----------------
 let leads = {};            // id -> lead
@@ -490,6 +516,47 @@ $("#formManual").addEventListener("submit", (e) => {
   e.target.reset(); e.target.hidden = true; toast("Lead adicionado ao funil");
 });
 
+// ---------------- importar do programa no PC ----------------
+const txt = (v, n = 300) => (v == null ? "" : String(v).slice(0, n));
+const chave = (l) => (txt(l.nome) + "|" + String(l.telefone || "").replace(/\D/g, "").replace(/^55/, "")).toLowerCase();
+function importar(texto) {
+  let d;
+  try { d = JSON.parse(String(texto).trim()); } catch { throw new Error("Isso não parece um código do Radar. No PC, clique em \"Enviar ao Claude\" e cole de novo."); }
+  if (d?.formato !== "radar-leads" || !Array.isArray(d.leads)) throw new Error("Arquivo ou código não reconhecido. Use o botão \"Enviar ao Claude\" do programa no PC.");
+  let novos = 0, atualizados = 0;
+  for (const x of d.leads.slice(0, 500)) {
+    if (!x || !x.nome) continue;
+    const id = txt(x.id, 40).replace(/[^a-zA-Z0-9_-]/g, "") || novoId();
+    const antigo = leads[id] || Object.values(leads).find((l) => chave(l) === chave(x));
+    const dados = {
+      tipo: "lead", origem: "pc", nome: txt(x.nome, 160), categoria: txt(x.categoria, 80), endereco: txt(x.endereco),
+      telefone: txt(x.telefone, 20), whatsapp: txt(x.whatsapp, 20), whatsappFonte: txt(x.whatsappFonte, 20), email: txt(x.email, 120),
+      instagram: txt(x.instagram, 60), facebook: txt(x.facebook, 120), site: linkSeguro(x.site) ? txt(x.site) : "",
+      siteTipo: ["nenhum", "rede_social", "proprio"].includes(x.siteTipo) ? x.siteTipo : "", mapsUrl: linkSeguro(x.mapsUrl) ? txt(x.mapsUrl, 500) : "",
+      nota: Number(x.nota) || null, avaliacoes: Number(x.avaliacoes) || null, cidade: txt(x.cidade, 60),
+      score: Math.max(0, Math.min(100, Number(x.score) || 0)), motivos: Array.isArray(x.motivos) ? x.motivos.slice(0, 12).map((m) => txt(m, 80)) : [],
+    };
+    if (antigo) { salvarLead({ ...antigo, ...dados, id: antigo.id }); atualizados++; }
+    else {
+      const etapa = ETAPAS.some((e) => e[0] === x.etapa) ? x.etapa : "novo";
+      salvarLead({ ...dados, id, nicho: "", etapa, notas: txt(x.notas, 2000), mensagem: "", followup: /^\d{4}-\d{2}-\d{2}$/.test(x.followup || "") ? x.followup : "", criadoEm: hoje() });
+      novos++;
+    }
+  }
+  return { novos, atualizados };
+}
+function rodarImport(texto) {
+  const st = $("#importStatus"); st.classList.remove("err");
+  try {
+    const { novos, atualizados } = importar(texto);
+    st.textContent = `${novos} leads novos e ${atualizados} atualizados. Veja no Funil.`;
+    $("#importTxt").value = ""; toast("Leads importados do PC");
+  } catch (e) { st.textContent = e.message; st.classList.add("err"); }
+}
+$("#btnImport").addEventListener("click", () => rodarImport($("#importTxt").value));
+$("#importTxt").addEventListener("paste", (e) => { const t = e.clipboardData?.getData("text"); if (t && t.includes('"radar-leads"')) { e.preventDefault(); rodarImport(t); } });
+$("#importFile").addEventListener("change", async (e) => { const f = e.target.files[0]; if (f) rodarImport(await f.text()); e.target.value = ""; });
+
 // ---------------- funil ----------------
 function moverEtapa(l, etapa) {
   if (l.etapa === etapa) return;
@@ -503,14 +570,14 @@ function renderKanban() {
   $("#funilEmpty").hidden = todos.length > 0;
   $(".kanban-scroll").hidden = !todos.length;
   const f = $("#filtro").value.trim().toLowerCase(), h = hoje();
-  const vis = todos.filter((l) => !f || `${l.nome} ${l.cidade} ${NICHOS[l.nicho]?.[0]}`.toLowerCase().includes(f));
+  const vis = todos.filter((l) => !f || `${l.nome} ${l.cidade} ${rotulo(l)}`.toLowerCase().includes(f));
   $("#kanban").innerHTML = ETAPAS.map(([id, nome]) => {
     const it = vis.filter((l) => l.etapa === id).sort((a, b) => b.score - a.score);
     return `<div class="col" data-etapa="${id}"><div class="col-h"><h3>${nome}</h3><span class="count">${it.length}</span></div>
       ${it.length ? it.map((l) => {
         const atras = l.followup && l.followup <= h && ativo(l);
         return `<button class="kcard" draggable="true" data-id="${l.id}"><span class="t">${esc(l.nome)}</span>
-          <span class="s">${pill(l.score)}<span>${esc(NICHOS[l.nicho]?.[0] || "")}${l.cidade ? " · " + esc(l.cidade) : ""}</span>
+          <span class="s">${pill(l.score)}${semSiteTag(l)}${l.origem === "pc" ? canais(l) : ""}<span>${esc(rotulo(l))}${l.cidade ? " · " + esc(l.cidade) : ""}</span>
           ${l.followup ? `<span class="${atras ? "due" : ""}">⏰ ${br(l.followup)}</span>` : ""}</span></button>`;
       }).join("") : `<div class="empty-col">Arraste um lead para cá</div>`}</div>`;
   }).join("");
@@ -529,8 +596,8 @@ kb.addEventListener("drop", (e) => {
 kb.addEventListener("click", (e) => { const id = e.target.closest(".kcard")?.dataset.id; if (id) abrir(id); });
 
 $("#btnCsv").addEventListener("click", async () => {
-  const cols = ["nome", "nicho", "cidade", "telefone", "instagram", "endereco", "nota", "avaliacoes", "score", "etapa", "followup", "notas"];
-  const csv = "﻿" + [cols.join(";"), ...Object.values(leads).map((l) => cols.map((c) => `"${String(c === "nicho" ? NICHOS[l.nicho]?.[0] ?? "" : l[c] ?? "").replace(/"/g, '""')}"`).join(";"))].join("\n");
+  const cols = ["nome", "nicho", "cidade", "telefone", "whatsapp", "email", "instagram", "site", "endereco", "nota", "avaliacoes", "score", "etapa", "followup", "notas"];
+  const csv = "﻿" + [cols.join(";"), ...Object.values(leads).map((l) => cols.map((c) => `"${String(c === "nicho" ? rotulo(l) : l[c] ?? "").replace(/"/g, '""')}"`).join(";"))].join("\n");
   const dl = window.claude?.use ? await claude.use("downloads") : null;
   if (!dl) { toast("Download indisponível aqui"); return; }
   try { await dl.save({ filename: `leads-${hoje()}.csv`, data: csv }); } catch (e) { if (e?.code !== "declined") toast("Download cancelado"); }
@@ -573,10 +640,15 @@ function abrir(id) {
   const l = leads[id]; if (!l) return;
   atual = { ...l }; confirmarExcluir = false; $("#mExcluir").textContent = "Excluir lead";
   $("#mNome").textContent = l.nome;
-  $("#mInfo").innerHTML = `<span>${pill(l.score)} ${esc(NICHOS[l.nicho]?.[0] || "")}${l.cidade ? " · " + esc(l.cidade) : ""}</span>
-    ${l.instagram ? `<span>◎ ${esc(l.instagram)}</span>` : ""}${l.endereco ? `<span>⌖ ${esc(l.endereco)}</span>` : ""}
-    ${l.nota ? `<span>★ ${l.nota}${l.avaliacoes ? ` (${l.avaliacoes} avaliações)` : ""}</span>` : ""}<span>${esc((l.motivos || []).join(" · "))}</span>`;
-  $("#mEtapa").value = l.etapa; $("#mFollow").value = l.followup || ""; $("#mTel").value = l.telefone || "";
+  const site = l.siteTipo === "nenhum" ? '<span class="tag-sem">Sem site: ótima oportunidade</span>'
+    : l.siteTipo === "rede_social" ? `<span><span class="tag-sem">Sem site próprio</span> · só ${l.site ? `<a href="${esc(l.site)}" target="_blank" rel="noopener">${esc(l.site.replace(/^https:\/\/(www\.)?/, "").slice(0, 40))}</a>` : "rede social"}</span>`
+    : l.siteTipo === "proprio" && l.site ? `<span>Site: <a href="${esc(l.site)}" target="_blank" rel="noopener">${esc(l.site.replace(/^https:\/\/(www\.)?/, "").slice(0, 50))}</a></span>` : "";
+  $("#mInfo").innerHTML = `<span>${pill(l.score)} ${esc(rotulo(l))}${l.cidade ? " · " + esc(l.cidade) : ""}</span>${site}
+    ${l.whatsapp ? `<span>WhatsApp: ${esc(telBR(l.whatsapp))}${l.whatsappFonte === "celular" ? " (provável)" : ""}</span>` : ""}
+    ${l.email ? `<span>E-mail: ${esc(l.email)}</span>` : ""}${l.instagram ? `<span>◎ ${esc(l.instagram)}</span>` : ""}${l.endereco ? `<span>⌖ ${esc(l.endereco)}</span>` : ""}
+    ${l.nota ? `<span>★ ${l.nota}${l.avaliacoes ? ` (${l.avaliacoes} avaliações)` : ""}${l.mapsUrl ? ` · <a href="${esc(l.mapsUrl)}" target="_blank" rel="noopener">Ver no Maps ↗</a>` : ""}</span>` : ""}
+    <span>${esc((l.motivos || []).join(" · "))}</span>`;
+  $("#mEtapa").value = l.etapa; $("#mFollow").value = l.followup || ""; $("#mTel").value = l.whatsapp || l.telefone || "";
   $("#mNotas").value = l.notas || ""; $("#mMsg").value = l.mensagem || "";
   atualizarWhats(); $("#modal").showModal();
 }
@@ -589,8 +661,10 @@ function atualizarWhats() {
 ["#mMsg", "#mTel"].forEach((s) => $(s).addEventListener("input", atualizarWhats));
 $("#mEtapa").addEventListener("change", () => { moverEtapa(atual, $("#mEtapa").value); $("#mFollow").value = atual.followup || ""; });
 function coletar() {
-  Object.assign(atual, { etapa: $("#mEtapa").value, followup: $("#mFollow").value, telefone: $("#mTel").value.trim(), notas: $("#mNotas").value, mensagem: $("#mMsg").value });
-  Object.assign(atual, pontuar(atual));
+  const fone = $("#mTel").value.trim();
+  Object.assign(atual, { etapa: $("#mEtapa").value, followup: $("#mFollow").value, notas: $("#mNotas").value, mensagem: $("#mMsg").value });
+  if (atual.origem === "pc") { if (fone !== (atual.whatsapp || atual.telefone || "")) atual.whatsapp = fone; }  // nota vem do PC
+  else { atual.telefone = fone; Object.assign(atual, pontuar(atual)); }
 }
 $("#mSalvar").addEventListener("click", () => { coletar(); salvarLead(atual); $("#modal").close(); toast("Lead salvo"); });
 $("#mFechar").addEventListener("click", () => $("#modal").close());
@@ -609,10 +683,12 @@ $("#mWhats").addEventListener("click", () => {
 });
 
 function mensagemPronta(l) {
-  const termo = NICHOS[l.nicho]?.[1] || "negócio";
+  const termo = (NICHOS[l.nicho]?.[1] || l.categoria || "o seu ramo").toLowerCase();
+  const nome = l.nome.split(/\s[|–-]\s/)[0].trim();
+  const falta = l.siteTipo === "rede_social" ? "não encontrei um site próprio, só as redes sociais." : "não encontrei um site.";
   const quem = cfg.nome ? `Aqui é ${cfg.nome}.` : "Tudo bem?";
   const gancho = l.avaliacoes >= 30 ? `Vi que vocês têm ${l.avaliacoes} avaliações no Google, muito bom! Mas` : l.instagram ? "Vi o Instagram de vocês, mas" : "Procurei vocês no Google e";
-  return `Olá, ${l.nome}! ${quem} ${gancho} não encontrei um site.\n\nQuem procura ${termo}${l.cidade ? " em " + l.cidade.split(",")[0] : ""} costuma pesquisar no Google antes de escolher, e um site simples ajuda a aparecer e passar confiança.\n\n${cfg.oferta || "Eu crio sites rápidos e acessíveis para negócios locais."} Posso te mostrar um exemplo de como ficaria o de vocês, sem compromisso?`;
+  return `Olá, ${nome}! ${quem} ${gancho} ${falta}\n\nQuem procura ${termo}${l.cidade ? " em " + l.cidade.split(",")[0] : ""} costuma pesquisar no Google antes de escolher, e um site simples ajuda a aparecer e passar confiança.\n\n${cfg.oferta || "Eu crio sites rápidos e acessíveis para negócios locais."} Posso te mostrar um exemplo de como ficaria o de vocês, sem compromisso?`;
 }
 let gerando = null;
 $("#mGerar").addEventListener("click", async () => {
@@ -622,11 +698,12 @@ $("#mGerar").addEventListener("click", async () => {
   const sample = await getSample();
   if (!sample) { box.value = mensagemPronta(atual); atualizarWhats(); toast("IA indisponível aqui: usei um modelo pronto"); return; }
   gerando = new AbortController(); btn.textContent = "Parar"; const antes = box.value; box.value = "Escrevendo…";
-  const dados = { negocio: atual.nome, nicho: NICHOS[atual.nicho]?.[0], cidade: atual.cidade || null, instagram: atual.instagram || null,
+  const dados = { negocio: atual.nome, ramo: rotulo(atual) || null,
+    situacao_site: atual.siteTipo === "rede_social" ? "só tem rede social / link na bio" : atual.siteTipo === "proprio" ? "tem site próprio" : "não tem site", cidade: atual.cidade || null, instagram: atual.instagram || null,
     nota_google: atual.nota, avaliacoes_google: atual.avaliacoes, endereco: atual.endereco || null, anotacoes: atual.notas || null };
   try {
     const { text } = await sample(
-      `Escreva a primeira mensagem de WhatsApp de um profissional que cria sites para um negócio local brasileiro que ainda não tem site.\n` +
+      `Escreva a primeira mensagem de WhatsApp de um profissional que cria sites para um negócio local brasileiro. Considere a situacao_site dos dados.\n` +
       `Português do Brasil, tom cordial e direto, no máximo 80 palavras, no máximo um emoji, sem promessas exageradas. ` +
       `Use um detalhe real dos dados (avaliações, Instagram, bairro ou nicho), mostre um benefício concreto para esse tipo de negócio e termine com uma pergunta simples. ` +
       `Responda só com o texto da mensagem.\n\nRemetente: ${cfg.nome || "(sem nome; não assine)"}\nOferta: ${cfg.oferta || "criação de sites para negócios locais"}\nDados: ${JSON.stringify(dados)}`,
