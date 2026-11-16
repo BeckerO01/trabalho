@@ -2,18 +2,15 @@
 
 Encontra empresas no **Google Maps**, visita os sites delas para achar **WhatsApp, e-mail e Instagram**, e destaca quem **não tem site** (ou só tem Instagram/link na bio): os melhores clientes para quem vende criação de sites.
 
-## Instalar (uma vez)
-Precisa do [Node.js 18+](https://nodejs.org).
+## Como usar no seu computador
+1. Instale o [Node.js](https://nodejs.org) (botão LTS). Só na primeira vez.
+2. Baixe o projeto (botão verde **Code** → **Download ZIP**) e descompacte.
+3. Dê dois cliques em **Iniciar Radar.bat** (Windows) ou **Iniciar Radar.command** (Mac).
 
-```bash
-npm run setup      # instala dependências e o navegador Chromium
-```
+Na primeira vez ele instala tudo sozinho (alguns minutos). Depois abre o navegador em **http://localhost:8090**.
+Deixe a janela preta aberta enquanto usa; para desligar, feche a janela.
 
-## Usar
-```bash
-npm start
-```
-Abra **http://localhost:8090** no navegador.
+Pelo terminal, se preferir: `npm run setup` (uma vez) e `npm start`.
 
 1. **Nova busca**: escolha o que procura (ex.: `clínicas de estética, academias`), cidade e tamanho (Rápida ~20, Padrão 60, Completa 120, Cidade inteira até 400).
 2. A busca roda em segundo plano: lê nome, telefone, endereço, nota e avaliações no Maps e visita cada site (home + página de contato).
