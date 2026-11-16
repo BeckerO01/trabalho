@@ -13,7 +13,7 @@ auth.validarConfig();
 
 const PORT = Number(process.env.PORT) || 8090;
 const PUBLIC = path.resolve("public");
-const ETAPAS = ["novo", "contatado", "negociando", "fechado", "perdido"];
+const ETAPAS = ["novo", "contatado", "respondeu", "negociando", "fechado", "perdido"];
 
 const hoje = () => new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
 const somarDias = (n) => new Date(Date.now() + n * 864e5 - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
@@ -146,7 +146,7 @@ async function api(req, res, url) {
       const b = await corpo(req);
       if (b.etapa && ETAPAS.includes(b.etapa) && b.etapa !== lead.etapa) {
         lead.etapa = b.etapa;
-        if (["contatado", "negociando"].includes(b.etapa) && !("followup" in b)) lead.followup = somarDias(Number(db.config.diasFollowup) || 3);
+        if (["contatado", "respondeu", "negociando"].includes(b.etapa) && !("followup" in b)) lead.followup = somarDias(Number(db.config.diasFollowup) || 3);
         if (["fechado", "perdido"].includes(b.etapa)) lead.followup = "";
       }
       for (const k of ["followup", "notas", "mensagem", "descartado", "telefone", "whatsapp", "email", "instagram"]) if (k in b) lead[k] = b[k];

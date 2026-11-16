@@ -121,7 +121,15 @@ textarea { resize: vertical; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .toolbar input { flex: 1 1 200px; width: auto; }
 .kanban-scroll { overflow-x: auto; padding-bottom: 6px; }
-.kanban { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 12px; min-width: 1150px; }
+.kanban { display: grid; grid-template-columns: repeat(6, minmax(210px, 1fr)); gap: 12px; min-width: 1330px; }
+.lbl { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; margin: 0 0 6px; }
+.etapas, .cenarios { display: flex; flex-wrap: wrap; gap: 6px; }
+.etapa-b, .cen { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 7px 12px; cursor: pointer; font-size: 13px; font-weight: 500; }
+.etapa-b:hover, .cen:hover { border-color: var(--accent); }
+.etapa-b[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.cen[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.bloco { background: var(--sunk); border-radius: var(--r); padding: 12px; display: grid; gap: 10px; }
+.bloco .hint-s { margin: 0; }
 @media (max-width: 700px) { .kanban { grid-template-columns: 1fr; min-width: 0; } .kanban-scroll { overflow: visible; } }
 .col { background: var(--sunk); border-radius: var(--r); padding: 10px; min-height: 160px; display: flex; flex-direction: column; gap: 8px; }
 .col.over { outline: 2px dashed var(--accent); }
@@ -276,6 +284,7 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
       <h2 style="font-size:17px">Sua abordagem</h2>
       <label class="f">Seu nome (assina a mensagem) <input id="cfgNome" placeholder="Pedro"></label>
       <label class="f">O que você oferece <textarea id="cfgOferta" rows="2" placeholder="Sites profissionais a partir de R$ 497, prontos em 7 dias, com link para WhatsApp e Google Maps."></textarea></label>
+      <label class="f">Preço ou faixa de preço (usado quando o cliente pergunta "quanto custa?") <input id="cfgPreco" placeholder="a partir de R$ 497, em até 3x"></label>
       <label class="f">Dias até o follow-up depois do primeiro contato <input id="cfgDias" type="number" min="1" max="30" value="3"></label>
       <h2 style="font-size:17px">Seus sites</h2>
       <label class="f">Sites de referência (um link por linha, opcional) <textarea id="cfgRefs" rows="3" placeholder="https://exemplo.com.br"></textarea></label>
@@ -290,15 +299,22 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
   <div class="m">
     <div class="m-h"><h3 id="mNome"></h3><button class="btn ghost" id="mFechar" aria-label="Fechar">✕</button></div>
     <div class="m-info" id="mInfo"></div>
+    <div><p class="lbl">Em que pé está? Toque para mover o lead</p><div class="etapas" id="mEtapas"></div></div>
     <div class="row2">
-      <label class="f">Etapa <select id="mEtapa"></select></label>
       <label class="f">Próximo follow-up <input type="date" id="mFollow"></label>
+      <label class="f">Telefone / WhatsApp <input id="mTel" inputmode="tel"></label>
     </div>
-    <label class="f">Telefone / WhatsApp <input id="mTel" inputmode="tel"></label>
+    <select id="mEtapa" hidden aria-hidden="true"></select>
     <label class="f">Anotações <textarea id="mNotas" rows="2"></textarea></label>
-    <label class="f">Mensagem de abordagem <textarea id="mMsg" rows="7"></textarea></label>
+    <div class="bloco">
+      <p class="lbl" id="mCenLbl">Mensagens prontas para esta etapa</p>
+      <div class="cenarios" id="mCenarios"></div>
+      <label class="f">O que o cliente respondeu? (cole aqui para a IA te ajudar a responder) <textarea id="mResp" rows="2" placeholder="Ex.: Quanto custa? / Já tenho Instagram / Me manda mais informações"></textarea></label>
+      <p class="hint-s" id="mTent"></p>
+    </div>
+    <label class="f">Mensagem para enviar <textarea id="mMsg" rows="7"></textarea></label>
     <div class="actions">
-      <button class="btn" id="mGerar">✨ Escrever com IA</button>
+      <button class="btn" id="mGerar">✨ Responder com IA</button>
       <button class="btn" id="mCopiar">Copiar</button>
       <button class="btn" id="mPrompt">Prompt do site</button>
       <a class="btn wa" id="mWhats" target="_blank" rel="noopener">Abrir no WhatsApp ↗</a>
@@ -341,7 +357,7 @@ const NICHOS = {
   advogado: ["Advogados", "advogado", 20], contador: ["Contadores", "contabilidade", 18],
   imobiliaria: ["Imobiliárias", "imobiliária", 18], eletricista: ["Eletricistas e reformas", "eletricista", 14],
 };
-const ETAPAS = [["novo", "Novo"], ["contatado", "Contatado"], ["negociando", "Negociando"], ["fechado", "Fechado"], ["perdido", "Perdido"]];
+const ETAPAS = [["novo", "Novo"], ["contatado", "Sem resposta"], ["respondeu", "Respondeu"], ["negociando", "Negociando"], ["fechado", "Fechado"], ["perdido", "Perdido"]];
 const EXEMPLO = `Barbearia do Zé
 4,8 (213) · Barbearia · Rua XV de Novembro, 120 - Centro
 Aberto ⋅ Fecha às 19:00 · (41) 99812-4471
@@ -608,7 +624,7 @@ $("#importFile").addEventListener("change", async (e) => { const f = e.target.fi
 function moverEtapa(l, etapa) {
   if (l.etapa === etapa) return;
   l.etapa = etapa;
-  if (etapa === "contatado" || etapa === "negociando") l.followup = somarDias(hoje(), Number(cfg.dias) || 3);
+  if (["contatado", "respondeu", "negociando"].includes(etapa)) l.followup = somarDias(hoje(), Number(cfg.dias) || 3);
   if (etapa === "fechado" || etapa === "perdido") l.followup = "";
 }
 const ativo = (l) => !["fechado", "perdido"].includes(l.etapa);
@@ -701,7 +717,10 @@ function abrir(id) {
     <span>${esc((l.motivos || []).join(" · "))}</span>`;
   $("#mEtapa").value = l.etapa; $("#mFollow").value = l.followup || ""; $("#mTel").value = l.whatsapp || l.telefone || "";
   $("#mNotas").value = l.notas || ""; $("#mMsg").value = l.mensagem || "";
-  atualizarWhats(); $("#modal").showModal();
+  $("#mResp").value = l.respostaCliente || "";
+  renderEtapaModal();
+  if (!l.mensagem) $("#mMsg").value = CENARIOS[l.etapa]?.[l.etapa === "contatado" ? Math.min(Math.max((l.tentativas || 1) - 1, 0), 2) : 0]?.[1](l) || "";
+  atualizarWhats(); if (!$("#modal").open) $("#modal").showModal();
 }
 function atualizarWhats() {
   const n = numeroWhats($("#mTel").value), a = $("#mWhats");
@@ -713,7 +732,7 @@ function atualizarWhats() {
 $("#mEtapa").addEventListener("change", () => { moverEtapa(atual, $("#mEtapa").value); $("#mFollow").value = atual.followup || ""; });
 function coletar() {
   const fone = $("#mTel").value.trim();
-  Object.assign(atual, { etapa: $("#mEtapa").value, followup: $("#mFollow").value, notas: $("#mNotas").value, mensagem: $("#mMsg").value });
+  Object.assign(atual, { etapa: $("#mEtapa").value, followup: $("#mFollow").value, notas: $("#mNotas").value, mensagem: $("#mMsg").value, respostaCliente: $("#mResp").value.trim().slice(0, 2000) });
   if (atual.origem === "pc") { if (fone !== (atual.whatsapp || atual.telefone || "")) atual.whatsapp = fone; }  // nota vem do PC
   else { atual.telefone = fone; Object.assign(atual, pontuar(atual)); }
 }
@@ -729,8 +748,73 @@ $("#mCopiar").addEventListener("click", async () => {
 });
 $("#mWhats").addEventListener("click", () => {
   coletar();
-  if (atual.etapa === "novo") { moverEtapa(atual, "contatado"); $("#mEtapa").value = "contatado"; $("#mFollow").value = atual.followup; toast(`Marcado como Contatado · retorno em ${br(atual.followup)}`); }
-  salvarLead({ ...atual });
+  if (atual.etapa === "novo") { moverEtapa(atual, "contatado"); atual.tentativas = 1; toast(`Enviado · aguardando resposta, retorno em ${br(atual.followup)}`); }
+  else if (atual.etapa === "contatado") { atual.tentativas = (atual.tentativas || 1) + 1; atual.followup = somarDias(hoje(), Number(cfg.dias) || 3); toast(`Tentativa ${atual.tentativas} · próximo retorno em ${br(atual.followup)}`); }
+  else if (ativo(atual)) atual.followup = somarDias(hoje(), Number(cfg.dias) || 3);
+  $("#mEtapa").value = atual.etapa; $("#mFollow").value = atual.followup || "";
+  atual.mensagem = "";  // a próxima abertura sugere a mensagem certa para a etapa
+  setTimeout(() => { salvarLead({ ...atual }); renderEtapaModal(); }, 400);
+});
+
+// ---------------- mensagens prontas por etapa ----------------
+const CENARIOS = {
+  novo: [
+    ["Olá curto", (l) => msgOla(l, "curta")],
+    ["Olá completo", (l) => msgOla(l, "completa")],
+  ],
+  contatado: [
+    ["1º retorno", (l) => msgRetorno(l)],
+    ["2º retorno: oferecer prévia", (l) => `Oi! ${cfg.nome ? "Aqui é " + cfg.nome + ". " : ""}Para ficar mais fácil de visualizar, posso montar uma prévia do site de ${nomeCurto(l)} e te mandar por aqui, sem custo. Se gostar, a gente conversa; se não, sem problema nenhum. Posso fazer?`],
+    ["Última tentativa", (l) => `Olá! Como não consegui retorno, vou encerrar por aqui para não incomodar. Se em algum momento vocês quiserem um site para ${nomeCurto(l)} aparecer melhor no Google, é só me chamar neste número. Sucesso para vocês!`],
+  ],
+  respondeu: [
+    ["Perguntou quem é / do que se trata", (l) => `Claro! ${cfg.nome ? "Sou " + cfg.nome + " e crio" : "Eu crio"} sites para negócios locais. ${l.siteTipo === "proprio" ? "Vi o site de vocês e tenho ideias para ele trazer mais contatos." : l.siteTipo === "rede_social" ? "Vi que vocês estão só nas redes sociais, sem site próprio." : "Procurei vocês no Google e não achei um site."} A ideia é simples: um site que faz ${nomeCurto(l)} aparecer quando alguém procura ${perfil(l).termo}${ondeFica(l).cidade ? " em " + ondeFica(l).cidade : ""} e leva a pessoa direto para o WhatsApp de vocês. Posso te mandar um exemplo?`],
+    ["Perguntou o preço", () => `Boa pergunta! ${cfg.preco ? "O investimento é " + cfg.preco + "." : "O investimento é [VALOR]."} Inclui o site pronto, feito para celular, com botão de WhatsApp, mapa e avaliações do Google. Antes de fechar qualquer coisa, eu monto uma prévia para vocês verem como fica. Quer que eu prepare?`],
+    ["Tem interesse", (l) => `Que bom! Vou montar uma prévia do site de ${nomeCurto(l)} e te mando por aqui. Para ficar com a cara de vocês, pode me enviar o logo e 3 ou 4 fotos do espaço ou do trabalho? Se tiver os horários de atendimento e a lista dos principais serviços, ajuda bastante.`],
+    ["Disse que já tem Instagram", (l) => `Entendo, e o Instagram de vocês é importante mesmo. A diferença é que quem pesquisa "${perfil(l).termo}${ondeFica(l).cidade ? " em " + ondeFica(l).cidade : ""}" no Google não chega no Instagram: chega em quem tem site. Os dois se somam: o site traz quem está procurando agora, e o Instagram mantém o relacionamento. Posso te mostrar em 1 minuto como ficaria?`],
+    ["Pediu para falar com outra pessoa", (l) => `Perfeito, obrigado! Qual o melhor número ou horário para eu falar com essa pessoa? Se preferir, pode encaminhar esta mensagem: é sobre um site para ${nomeCurto(l)} aparecer melhor no Google.`],
+    ["Sem interesse agora", (l) => `Sem problema, obrigado por responder! Se mais para frente fizer sentido ter um site, é só me chamar neste número. Sucesso para ${nomeCurto(l)}!`],
+  ],
+  negociando: [
+    ["Enviar proposta", (l) => `Segue a proposta para o site de ${nomeCurto(l)}:\n\n• Site de uma página, feito para celular\n• Botão de WhatsApp em todas as seções\n• Mapa, horários e avaliações do Google\n• Textos e fotos organizados por mim\n• Prazo: [PRAZO]\n• Investimento: ${cfg.preco || "[VALOR]"}\n\nPara começar preciso só do seu ok e das fotos. Fechamos?`],
+    ["Cobrar resposta da proposta", () => `Oi! Conseguiu ver a proposta do site? Se ficou alguma dúvida sobre valor, prazo ou o que está incluso, me fala que eu explico. Se precisar, ajusto a proposta para caber melhor no momento de vocês.`],
+    ["Achou caro", () => `Entendo. Pensa assim: se o site trouxer um ou dois clientes novos por mês, ele já se paga, e continua trabalhando todos os dias sem anúncio. Posso dividir o valor em parcelas ou começar por uma versão mais simples. O que fica melhor para vocês?`],
+    ["Disse que vai pensar", () => `Claro, sem pressa. Para ajudar na decisão, posso deixar a prévia no ar por alguns dias para vocês mostrarem para quem quiser. Que dia posso te chamar de novo para saber o que acharam?`],
+  ],
+  fechado: [
+    ["Boas-vindas e próximos passos", () => `Fechado, obrigado pela confiança! Próximos passos:\n1. Você me envia logo, fotos, horários e lista de serviços.\n2. Eu te mando a primeira versão em [PRAZO].\n3. Você pede os ajustes e a gente publica.\n\nQualquer dúvida, é só chamar aqui.`],
+    ["Entregar o site", (l) => `O site de ${nomeCurto(l)} está no ar: [LINK]. Dá uma olhada no celular e no computador e me diz se quer algum ajuste. Vale colocar o link na bio do Instagram e na ficha do Google.`],
+    ["Pedir indicação", () => `Fico feliz que gostou do site! Se conhecer outro negócio que ainda não tem site, me indica? Atendo com o mesmo capricho.`],
+  ],
+  perdido: [
+    ["Agradecer e deixar a porta aberta", (l) => `Sem problema, obrigado pelo retorno! Se mais para frente fizer sentido ter um site, é só me chamar neste número. Sucesso para ${nomeCurto(l)}!`],
+    ["Retomar depois de um tempo", (l) => `Olá! ${cfg.nome ? "Aqui é " + cfg.nome + ". " : ""}Conversamos há um tempo sobre um site para ${nomeCurto(l)}. Estou com agenda aberta este mês e lembrei de vocês. Faz sentido retomar a conversa?`],
+  ],
+};
+const DICA_ETAPA = { novo: "Ainda não recebeu mensagem.", contatado: "Você mandou mensagem e ainda não teve resposta.", respondeu: "O cliente respondeu. Escolha o que ele disse ou cole a resposta para a IA ajudar.",
+  negociando: "Tem interesse: proposta e negociação.", fechado: "Cliente fechado.", perdido: "Não quis ou não respondeu depois de várias tentativas." };
+function renderEtapaModal() {
+  if (!atual) return;
+  const e = $("#mEtapa").value || atual.etapa;
+  $("#mEtapas").innerHTML = ETAPAS.map(([v, n]) => `<button type="button" class="etapa-b" data-etapa="${v}" aria-pressed="${v === e}">${n}</button>`).join("");
+  $("#mCenLbl").textContent = `Mensagens prontas · ${ETAPAS.find((x) => x[0] === e)?.[1]}`;
+  $("#mCenarios").innerHTML = (CENARIOS[e] || []).map(([nome], i) => `<button type="button" class="cen" data-cen="${i}" aria-pressed="false">${esc(nome)}</button>`).join("");
+  $("#mTent").textContent = DICA_ETAPA[e] + (e === "contatado" && atual.tentativas ? ` Tentativas até agora: ${atual.tentativas}.` : "");
+}
+$("#mEtapas").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-etapa]"); if (!b || !atual) return;
+  const nova = b.dataset.etapa; if (nova === atual.etapa) return;
+  $("#mEtapa").value = nova; moverEtapa(atual, nova); $("#mFollow").value = atual.followup || "";
+  // troca a mensagem pela primeira pronta da nova etapa
+  $("#mMsg").value = CENARIOS[nova]?.[0]?.[1](atual) || ""; atualizarWhats();
+  coletar(); atual.mensagem = ""; salvarLead({ ...atual }); renderEtapaModal();
+  toast(`Movido para ${ETAPAS.find((x) => x[0] === nova)?.[1]}${atual.followup ? " · retorno em " + br(atual.followup) : ""}`);
+});
+$("#mCenarios").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-cen]"); if (!b || !atual) return;
+  const e = $("#mEtapa").value;
+  $("#mMsg").value = CENARIOS[e][Number(b.dataset.cen)][1](atual); atualizarWhats();
+  document.querySelectorAll("#mCenarios .cen").forEach((c) => c.setAttribute("aria-pressed", String(c === b)));
 });
 
 function mensagemPronta(l) {
@@ -747,23 +831,28 @@ $("#mGerar").addEventListener("click", async () => {
   if (gerando) { gerando.abort(); return; }
   coletar();
   const sample = await getSample();
-  if (!sample) { box.value = mensagemPronta(atual); atualizarWhats(); toast("IA indisponível aqui: usei um modelo pronto"); return; }
+  if (!sample) { box.value = CENARIOS[atual.etapa]?.[0]?.[1](atual) || mensagemPronta(atual); atualizarWhats(); toast("IA indisponível aqui: usei uma mensagem pronta"); return; }
   gerando = new AbortController(); btn.textContent = "Parar"; const antes = box.value; box.value = "Escrevendo…";
+  const etapa = atual.etapa, resp = $("#mResp").value.trim().slice(0, 1500);
+  const proximo = { novo: "abrir a conversa e pedir para falar com o responsável", contatado: "retomar o contato sem insistir demais", respondeu: "oferecer uma prévia gratuita do site", negociando: "fechar a proposta", fechado: "combinar os próximos passos da entrega", perdido: "agradecer e deixar a porta aberta" }[etapa];
   const dados = { negocio: atual.nome, ramo: rotulo(atual) || null,
     situacao_site: atual.siteTipo === "rede_social" ? "só tem rede social / link na bio" : atual.siteTipo === "proprio" ? "tem site próprio" : "não tem site", cidade: atual.cidade || null, instagram: atual.instagram || null,
     nota_google: atual.nota, avaliacoes_google: atual.avaliacoes, endereco: atual.endereco || null, anotacoes: atual.notas || null };
   try {
     const { text } = await sample(
-      `Escreva a primeira mensagem de WhatsApp de um profissional que cria sites para um negócio local brasileiro. Considere a situacao_site dos dados.\n` +
-      `Português do Brasil, tom cordial e direto, no máximo 80 palavras, no máximo um emoji, sem promessas exageradas. ` +
-      `Use um detalhe real dos dados (avaliações, Instagram, bairro ou nicho), mostre um benefício concreto para esse tipo de negócio e termine com uma pergunta simples. ` +
-      `Responda só com o texto da mensagem.\n\nRemetente: ${cfg.nome || "(sem nome; não assine)"}\nOferta: ${cfg.oferta || "criação de sites para negócios locais"}\nDados: ${JSON.stringify(dados)}`,
+      (resp
+        ? `Você ajuda um profissional que cria sites a responder um cliente no WhatsApp. Escreva a próxima mensagem dele, respondendo diretamente ao que o cliente disse e conduzindo para o próximo passo (${proximo}).\n`
+        : `Escreva a próxima mensagem de WhatsApp de um profissional que cria sites para um negócio local brasileiro. Situação da conversa: ${DICA_ETAPA[etapa]} Objetivo da mensagem: ${proximo}.\n`) +
+      `Português do Brasil, tom humano, cordial e direto, no máximo 80 palavras, no máximo um emoji, sem pressão e sem promessas exageradas. Use um detalhe real dos dados quando ajudar. Termine com uma pergunta simples. ` +
+      `Não invente preço, prazo nem fatos: se precisar de um valor que não está abaixo, escreva [VALOR] ou [PRAZO]. Responda só com o texto da mensagem.\n\n` +
+      `Remetente: ${cfg.nome || "(sem nome; não assine)"}\nOferta: ${cfg.oferta || "criação de sites para negócios locais"}\nPreço: ${cfg.preco || "(não informado)"}\nEtapa do funil: ${ETAPAS.find((x) => x[0] === etapa)?.[1]}\n` +
+      (resp ? `Mensagem do cliente: """${resp}"""\n` : "") + `Dados do negócio: ${JSON.stringify(dados)}`,
       { modelTier: "quick", cache: false, signal: gerando.signal, onText: ({ text }) => { box.value = text; } });
     box.value = text.trim();
   } catch (e) {
     if (e?.code === "cancelled") box.value = e.text || antes;
-    else { box.value = mensagemPronta(atual); toast(erroIA(e?.code) + " Usei um modelo pronto."); }
-  } finally { gerando = null; btn.textContent = "✨ Escrever com IA"; atualizarWhats(); }
+    else { box.value = CENARIOS[atual.etapa]?.[0]?.[1](atual) || mensagemPronta(atual); toast(erroIA(e?.code) + " Usei uma mensagem pronta."); }
+  } finally { gerando = null; btn.textContent = "✨ Responder com IA"; atualizarWhats(); }
 });
 
 // ================= MENSAGENS PRONTAS + PROMPT DO SITE =================
@@ -1070,7 +1159,7 @@ $("#listaMsgs").addEventListener("click", async (e) => {
   const l = leads[card.dataset.id]; if (!l) return;
   const texto = card.querySelector("textarea").value;
   if (e.target.closest("[data-enviar]")) {
-    setTimeout(() => { const n = { ...l, mensagem: texto }; moverEtapa(n, "contatado"); salvarLead(n); toast(`${nomeCurto(l)}: marcado como Contatado, retorno em ${br(n.followup)}`); }, 400);
+    setTimeout(() => { const n = { ...l, mensagem: "", tentativas: 1 }; moverEtapa(n, "contatado"); salvarLead(n); toast(`${nomeCurto(l)}: enviado, aguardando resposta. Retorno em ${br(n.followup)}`); }, 400);
   } else if (e.target.closest("[data-copiar]")) {
     try { await navigator.clipboard.writeText(texto); toast("Mensagem copiada"); } catch { card.querySelector("textarea").select(); toast("Texto selecionado: copie manualmente"); }
   } else if (e.target.closest("[data-prompt]")) abrirPrompt(l.id);
@@ -1392,11 +1481,11 @@ $("#pIA").addEventListener("click", async () => {
 });
 
 // ---------------- configurações ----------------
-function preencherCfg() { $("#cfgNome").value = cfg.nome || ""; $("#cfgOferta").value = cfg.oferta || ""; $("#cfgDias").value = cfg.dias || 3; $("#cfgRefs").value = cfg.refs || ""; $("#cfgEstilo").value = cfg.estilo || ""; }
+function preencherCfg() { $("#cfgNome").value = cfg.nome || ""; $("#cfgOferta").value = cfg.oferta || ""; $("#cfgDias").value = cfg.dias || 3; $("#cfgPreco").value = cfg.preco || ""; $("#cfgRefs").value = cfg.refs || ""; $("#cfgEstilo").value = cfg.estilo || ""; }
 $("#formCfg").addEventListener("submit", (e) => {
   e.preventDefault();
   cfg = { ...cfg, nome: $("#cfgNome").value.trim(), oferta: $("#cfgOferta").value.trim(), dias: Math.max(1, Number($("#cfgDias").value) || 3),
-    refs: $("#cfgRefs").value.trim().slice(0, 1500), estilo: $("#cfgEstilo").value.trim().slice(0, 1000) };
+    preco: $("#cfgPreco").value.trim().slice(0, 120), refs: $("#cfgRefs").value.trim().slice(0, 1500), estilo: $("#cfgEstilo").value.trim().slice(0, 1000) };
   salvarCfg(); toast("Configurações salvas");
 });
 

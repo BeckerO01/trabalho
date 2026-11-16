@@ -1,7 +1,7 @@
 // Interface do Radar de Leads (SPA sem dependências).
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const ETAPAS = [["novo", "Novo"], ["contatado", "Contatado"], ["negociando", "Negociando"], ["fechado", "Fechado"], ["perdido", "Perdido"]];
+const ETAPAS = [["novo", "Novo"], ["contatado", "Sem resposta"], ["respondeu", "Respondeu"], ["negociando", "Negociando"], ["fechado", "Fechado"], ["perdido", "Perdido"]];
 const nomeEtapa = (e) => ETAPAS.find((x) => x[0] === e)?.[1] || e;
 const SUGESTOES = ["clínicas odontológicas", "clínicas de estética", "academias", "escritórios de advocacia", "escritórios de contabilidade",
   "imobiliárias", "pet shops", "salões de beleza", "barbearias", "restaurantes", "oficinas mecânicas", "lojas de material de construção",
