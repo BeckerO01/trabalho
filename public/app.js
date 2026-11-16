@@ -15,6 +15,7 @@ const porId = () => Object.fromEntries(S.leads.map((l) => [l.id, l]));
 async function api(metodo, url, body) {
   const r = await fetch("/api/" + url, { method: metodo, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { location.href = "/login"; throw new Error("Faça login."); }
   if (!r.ok) throw new Error(j.erro || "Erro " + r.status);
   return j;
 }
@@ -194,7 +195,7 @@ const views = {
         <label class="f">Dias até o follow-up depois do primeiro contato<input name="diasFollowup" type="number" min="1" max="60" value="${c.diasFollowup || 3}"></label>
         <label class="f">Chave da API Claude (opcional)<input name="anthropicKey" type="password" autocomplete="off" placeholder="${c.temChave ? "Chave salva. Cole outra para trocar." : "sk-ant-…"}"></label>
         <p class="muted" style="margin:-6px 0 0;font-size:12px">${c.temChave ? "Mensagens escritas pelo Claude. " : "Sem chave, o app usa um modelo de mensagem pronto. "}A chave fica só neste computador, em data/db.json.</p>
-        <div class="acoes"><button class="btn primary" type="submit">Salvar</button>${c.temChave ? '<button class="btn danger ghost" type="button" id="rmChave">Remover chave</button>' : ""}</div>
+        <div class="acoes"><button class="btn primary" type="submit">Salvar</button>${c.temChave ? '<button class="btn danger ghost" type="button" id="rmChave">Remover chave</button>' : ""}${c.login ? '<span class="spacer"></span><button class="btn ghost" type="button" id="btnSair">Sair</button>' : ""}</div>
       </form>`];
   },
 };
@@ -249,6 +250,7 @@ document.addEventListener("click", async (e) => {
   if (env) { enviarAoClaude(env.dataset.enviar); return; }
   const ad = e.target.closest("[data-adiar]");
   if (ad) { const d = new Date(Date.now() + 2 * 864e5); await salvarLead(ad.dataset.adiar, { followup: d.toISOString().slice(0, 10) }); toast("Adiado 2 dias"); }
+  if (e.target.id === "btnSair") { await api("POST", "logout").catch(() => {}); location.href = "/login"; return; }
   if (e.target.id === "rmChave") { S.config = await api("PUT", "config", { removerChave: true }); $("#view").dataset.v = ""; render(); toast("Chave removida"); }
 });
 document.addEventListener("submit", async (e) => {
@@ -279,7 +281,7 @@ async function enviarAoClaude(ids) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([texto], { type: "application/json" }));
   a.download = `radar-leads-${S.hoje}.json`; a.click(); URL.revokeObjectURL(a.href);
-  toast(`${pacote.leads.length} leads ${copiado ? "copiados" : "salvos em arquivo"}. No Radar do Claude, clique em Importar do PC e cole (Ctrl+V).`);
+  toast(copiado ? `${pacote.leads.length} leads copiados. No Radar do Claude, cole em Importar do PC.` : `${pacote.leads.length} leads salvos em arquivo. No Radar do Claude, use "Escolher arquivo .json".`);
   window.open(URL_CLAUDE, "_blank", "noopener");
 }
 

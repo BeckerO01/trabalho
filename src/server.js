@@ -7,6 +7,9 @@ import db, { salvar, salvarAgora } from "./db.js";
 import { rodarBusca, TAMANHOS } from "./scraper.js";
 import { pontuar, temperatura } from "./scoring.js";
 import { mensagemIA, mensagemPronta } from "./ia.js";
+import * as auth from "./auth.js";
+
+auth.validarConfig();
 
 const PORT = Number(process.env.PORT) || 8090;
 const PUBLIC = path.resolve("public");
@@ -89,7 +92,7 @@ const resumoBusca = (b) => {
     semSite: ls.filter((l) => l.siteTipo !== "proprio").length,
   };
 };
-const configPublica = () => ({ ...db.config, anthropicKey: undefined, temChave: Boolean(process.env.ANTHROPIC_API_KEY || db.config.anthropicKey) });
+const configPublica = () => ({ ...db.config, anthropicKey: undefined, login: auth.ATIVO, temChave: Boolean(process.env.ANTHROPIC_API_KEY || db.config.anthropicKey) });
 const csvCampo = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
 // ---------- rotas ----------
@@ -203,6 +206,24 @@ function estatico(req, res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   try {
+    if (auth.ATIVO) {
+      if (url.pathname === "/api/login" && req.method === "POST") {
+        const r = auth.entrar(req, (await corpo(req)).senha);
+        if (r.erro) return json(res, r.codigo, { erro: r.erro });
+        res.setHeader("Set-Cookie", r.cookie);
+        return json(res, 200, { ok: true });
+      }
+      if (url.pathname === "/api/logout" && req.method === "POST") {
+        res.setHeader("Set-Cookie", auth.cookieSair);
+        return json(res, 200, { ok: true });
+      }
+      if (url.pathname === "/login") { url.pathname = "/login.html"; return estatico(req, res, url); }
+      if (!auth.logado(req)) {
+        if (url.pathname.startsWith("/api/")) return json(res, 401, { erro: "Faça login." });
+        res.writeHead(302, { Location: "/login" });
+        return res.end();
+      }
+    }
     if (url.pathname.startsWith("/api/")) return await api(req, res, url);
     return estatico(req, res, url);
   } catch (e) {
@@ -211,9 +232,9 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-// só escuta no próprio computador
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`\n  Radar de Leads rodando em http://localhost:${PORT}\n`);
+// sem senha: só o próprio computador acessa. Com RADAR_SENHA: aceita acesso de fora, com login.
+server.listen(PORT, auth.ATIVO ? "0.0.0.0" : "127.0.0.1", () => {
+  console.log(`\n  Radar de Leads rodando em http://localhost:${PORT}${auth.ATIVO ? " (acesso externo com senha)" : ""}\n`);
   processarFila();
 });
 process.on("SIGINT", () => { salvarAgora(); process.exit(0); });
