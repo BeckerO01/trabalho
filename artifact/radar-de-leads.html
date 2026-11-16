@@ -102,6 +102,19 @@ textarea { resize: vertical; }
 .score.hot { background: var(--hot); } .score.warm { background: var(--warm); } .score.cold { background: var(--cold); }
 .tag-ex { font: 600 10px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--warm); }
 
+/* mensagens e prompt */
+.msg-top { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 6px; }
+.msg-top label.f { flex: 0 1 260px; }
+.msgs { display: grid; gap: 12px; margin-top: 12px; }
+.msg { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 8px; min-width: 0; }
+.msg .s { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.msg .s:empty { display: none; }
+.msg textarea { font-size: 14px; line-height: 1.5; }
+.hint-s { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+#pDlg { width: min(920px, calc(100vw - 24px)); }
+#pTxt { font: 500 12.5px/1.6 var(--f-mono); height: min(58dvh, 620px); white-space: pre-wrap; }
+#pMeta { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+
 /* funil */
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .toolbar input { flex: 1 1 200px; width: auto; }
@@ -146,6 +159,7 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
     <div class="brand"><span class="radar" aria-hidden="true"></span><div><h1>Radar de Leads</h1><small>negócios locais sem site</small></div></div>
     <nav class="tabs" role="tablist">
       <button class="tab" role="tab" data-view="buscar" aria-selected="true">Encontrar</button>
+      <button class="tab" role="tab" data-view="msgs" aria-selected="false">Mensagens <span class="count" id="cMsgs">0</span></button>
       <button class="tab" role="tab" data-view="funil" aria-selected="false">Funil <span class="count" id="cFunil">0</span></button>
       <button class="tab" role="tab" data-view="follow" aria-selected="false">Follow-ups <span class="count" id="cFollow">0</span></button>
       <button class="tab" role="tab" data-view="config" aria-selected="false">Configurações</button>
@@ -222,6 +236,19 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
     <div class="grid" id="resultados"></div>
   </section>
 
+  <!-- MENSAGENS -->
+  <section class="view" id="v-msgs" hidden>
+    <div class="msg-top">
+      <label class="f">Tipo de mensagem
+        <select id="msgTipo"><option value="curta">Curta: só o olá e pedir o responsável</option><option value="completa">Completa: já apresenta a oferta</option></select>
+      </label>
+      <button class="btn" id="msgIA">✨ Personalizar as próximas 20 com IA</button>
+    </div>
+    <p class="hint-s" id="msgInfo"></p>
+    <div class="status" id="msgStatus" role="status"></div>
+    <div class="msgs" id="listaMsgs"></div>
+  </section>
+
   <!-- FUNIL -->
   <section class="view" id="v-funil" hidden>
     <div class="toolbar">
@@ -248,7 +275,10 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
       <label class="f">Seu nome (assina a mensagem) <input id="cfgNome" placeholder="Pedro"></label>
       <label class="f">O que você oferece <textarea id="cfgOferta" rows="2" placeholder="Sites profissionais a partir de R$ 497, prontos em 7 dias, com link para WhatsApp e Google Maps."></textarea></label>
       <label class="f">Dias até o follow-up depois do primeiro contato <input id="cfgDias" type="number" min="1" max="30" value="3"></label>
-      <p>As mensagens são escritas pelo Claude da sua própria conta. Não precisa de chave de API.</p>
+      <h2 style="font-size:17px">Seus sites</h2>
+      <label class="f">Sites de referência (um link por linha, opcional) <textarea id="cfgRefs" rows="3" placeholder="https://exemplo.com.br"></textarea></label>
+      <label class="f">Observações de estilo que valem para todos os sites (opcional) <textarea id="cfgEstilo" rows="2" placeholder="Ex.: sempre com seção de preços; evitar fotos de banco de imagens."></textarea></label>
+      <p>As referências e observações entram no prompt de cada site. As mensagens e o conteúdo com IA usam o Claude da sua própria conta, sem chave de API.</p>
       <div class="actions"><button class="btn primary" type="submit">Salvar</button></div>
     </form>
   </section>
@@ -268,6 +298,7 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
     <div class="actions">
       <button class="btn" id="mGerar">✨ Escrever com IA</button>
       <button class="btn" id="mCopiar">Copiar</button>
+      <button class="btn" id="mPrompt">Prompt do site</button>
       <a class="btn wa" id="mWhats" target="_blank" rel="noopener">Abrir no WhatsApp ↗</a>
     </div>
     <div class="actions">
@@ -275,6 +306,19 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
       <span class="spacer"></span>
       <button class="btn primary" id="mSalvar">Salvar</button>
     </div>
+  </div>
+</dialog>
+
+<dialog id="pDlg">
+  <div class="m">
+    <div class="m-h"><div><h3 id="pNome"></h3><p id="pMeta"></p></div><button class="btn ghost" id="pFechar" aria-label="Fechar">✕</button></div>
+    <div class="actions">
+      <button class="btn primary" id="pCopiar">Copiar prompt</button>
+      <button class="btn" id="pBaixar">Baixar .md</button>
+      <button class="btn" id="pIA">✨ Aprofundar com IA</button>
+    </div>
+    <div class="status" id="pStatus" role="status"></div>
+    <textarea id="pTxt" readonly aria-label="Prompt do site"></textarea>
   </div>
 </dialog>
 
@@ -358,7 +402,7 @@ const linkSeguro = (u) => /^https:\/\//i.test(String(u || "")) ? String(u) : "";
 
 // ---------------- estado + persistência ----------------
 let leads = {};            // id -> lead
-let cfg = { nome: "", oferta: "", dias: 3 };
+let cfg = { nome: "", oferta: "", dias: 3, msgTipo: "curta", refs: "", estilo: "" };
 let resultados = [];       // extraídos, ainda não no funil
 let col = null;            // coleção privada no db (quando disponível)
 
@@ -612,11 +656,13 @@ function renderFollow() {
     const quando = l.followup < h ? "Atrasado desde " + br(l.followup) : l.followup === h ? "Hoje" : br(l.followup);
     return `<div class="fu"><div><strong>${esc(l.nome)}</strong> <span class="muted">· ${ETAPAS.find((e) => e[0] === l.etapa)?.[1]}</span><br>
       <span class="fu-date ${l.followup <= h ? "due" : "muted"}">⏰ ${quando}</span></div>
-      <div class="actions"><button class="btn sm" data-adiar="${l.id}">Adiar 2 dias</button><button class="btn sm primary" data-abrir="${l.id}">Abrir</button></div></div>`;
+      <div class="actions">${linkWa(l, msgRetorno(l)) ? `<a class="btn sm wa" target="_blank" rel="noopener" href="${esc(linkWa(l, msgRetorno(l)))}" data-retorno="${l.id}">Mandar retorno ↗</a>` : ""}<button class="btn sm" data-adiar="${l.id}">Adiar 2 dias</button><button class="btn sm primary" data-abrir="${l.id}">Abrir</button></div></div>`;
   }).join("") : `<div class="empty"><h3>Nenhum retorno agendado</h3><p>Quando você marca um lead como Contatado, o retorno é agendado sozinho para daqui a ${Number(cfg.dias) || 3} dias.</p></div>`;
 }
 $("#listaFollow").addEventListener("click", (e) => {
   const a = e.target.closest("[data-abrir]")?.dataset.abrir, d = e.target.closest("[data-adiar]")?.dataset.adiar;
+  const r = e.target.closest("[data-retorno]")?.dataset.retorno;
+  if (r && leads[r]) setTimeout(() => { salvarLead({ ...leads[r], followup: somarDias(hoje(), Number(cfg.dias) || 3) }); toast("Retorno enviado. Próximo lembrete em " + (Number(cfg.dias) || 3) + " dias."); }, 400);
   if (a) abrir(a);
   if (d && leads[d]) { leads[d].followup = somarDias(hoje(), 2); salvarLead(leads[d]); toast("Adiado 2 dias"); }
 });
@@ -625,11 +671,13 @@ function renderContadores() {
   $("#cFunil").textContent = Object.keys(leads).length;
   const n = pendentes().length;
   $("#cFollow").textContent = n; $("#cFollow").classList.toggle("alert", n > 0);
+  $("#cMsgs").textContent = filaMsgs().length;
 }
 function renderTudo() {
   renderContadores();
   if (viewAtual === "funil") renderKanban();
   if (viewAtual === "follow") renderFollow();
+  if (viewAtual === "msgs") renderMsgs();
   if (viewAtual === "buscar" && resultados.length) renderResultados();
 }
 
@@ -715,11 +763,576 @@ $("#mGerar").addEventListener("click", async () => {
   } finally { gerando = null; btn.textContent = "✨ Escrever com IA"; atualizarWhats(); }
 });
 
+// ================= MENSAGENS PRONTAS + PROMPT DO SITE =================
+const semAcento = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const hashN = (s, n) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % n; };
+const GENERICAS = /^(clinica|centro|consultorio|escritorio|studio|estudio|espaco|instituto|salao|loja|de|da|do|e|em|estetica|avancada|odontologica|odontologia|medica|beleza|saude|advocacia|contabilidade|facial|corporal|integrada|especializada)$/;
+function nomeCurto(l) {
+  const partes = String(l.nome || "").split(/\s[|–-]\s|\s*[|:]\s*/).map((x) => x.trim()).filter(Boolean);
+  if (!partes.length) return String(l.nome || "");
+  // se o primeiro trecho só tem palavras genéricas ("Clínica estética avançada"), junta o trecho que identifica a empresa
+  const generico = semAcento(partes[0]).split(/\s+/).every((w) => GENERICAS.test(w));
+  return (generico && partes[1] ? partes[0] + " " + partes[1] : partes[0]).slice(0, 70);
+}
+function ondeFica(l) {
+  const m = String(l.endereco || "").match(/-\s*([^,\-]+),\s*([^,\-]+?)\s*-\s*([A-Z]{2})\b/);
+  if (m) return { bairro: m[1].trim(), cidade: m[2].trim(), uf: m[3] };
+  const c = String(l.cidade || "");
+  return { bairro: "", cidade: c.split(/[,-]/)[0].trim(), uf: (c.match(/\b([A-Z]{2})\b/) || [])[1] || "" };
+}
+
+// ---------- perfis de ramo: público, cores, fontes, fotos, motion, seções ----------
+// paleta: [fundo, superfície, texto, texto secundário, primária (botões), acento]
+const PERFIS = [
+  { id: "oficina", re: /oficina|mecanic|auto ?center|funilaria|autoeletric|auto pecas|lava ?(jato|car|rapido)|automotiv|borrachar|pneu/, termo: "oficina mecânica", schema: "AutoRepair",
+    publico: "motoristas da região que precisam resolver um problema no carro sem medo de serem enganados", dor: "desconfiança de orçamento inflado e carro parado por muitos dias",
+    promessa: "diagnóstico honesto, orçamento antes de mexer e prazo cumprido", tom: "direto, técnico sem jargão, transmite honestidade",
+    paleta: ["#FFFFFF", "#F1F3F5", "#14181D", "#5A636E", "#C62828", "#1F2A37"], fontes: ["Barlow Condensed (600/700)", "Barlow (400/500)"],
+    heads: ["Seu carro resolvido sem surpresa no orçamento", "Oficina de confiança em {cidade}"], cta: "Pedir orçamento", waMsg: "Olá! Vim pelo site e quero um orçamento para o meu carro.",
+    servicos: ["Revisão completa", "Freios e suspensão", "Troca de óleo e filtros", "Injeção eletrônica e diagnóstico por scanner", "Ar-condicionado automotivo", "Embreagem e câmbio"],
+    difs: ["Orçamento aprovado por WhatsApp antes de qualquer serviço", "Peças com garantia e nota fiscal", "Fotos e vídeo do problema enviados ao cliente", "Prazo combinado e cumprido"],
+    extras: [["Como funciona", "4 passos em linha: 1) Você chama no WhatsApp 2) Diagnóstico 3) Orçamento aprovado por você 4) Carro pronto no prazo."], ["Marcas atendidas", "Faixa com nomes das montadoras atendidas em texto (sem usar logotipos oficiais)."]],
+    fotos: [["Hero", "mecânico uniformizado de costas para um carro no elevador, oficina limpa e organizada, ferramentas alinhadas na parede", "4:5"], ["Serviços", "close de mãos com luva trocando pastilha de freio, disco em foco", "1:1"], ["Serviços", "scanner de diagnóstico conectado ao painel do carro, tela legível mas sem marca", "1:1"], ["Diferenciais", "mecânico mostrando a peça gasta ao cliente, os dois olhando a peça", "3:2"], ["Sobre", "equipe em frente à fachada da oficina, luz do dia, postura natural", "16:9"], ["Galeria", "box de serviço visto de frente, piso limpo, carro com capô aberto", "3:2"]],
+    motion: "Assinatura: uma linha fina vermelha que 'liga' os 4 passos do Como funciona conforme a rolagem (stroke-dashoffset), como um medidor enchendo.",
+    faq: ["Vocês fazem orçamento sem compromisso?", "Quanto tempo leva uma revisão?", "As peças têm garantia?", "Posso acompanhar o serviço por WhatsApp?", "Atendem quais marcas e modelos?"] },
+
+  { id: "odonto", re: /odont|dentist|ortodont|implante|sorriso/, termo: "dentista", schema: "Dentist",
+    publico: "adultos e famílias da região que adiam a ida ao dentista por medo, preço ou falta de indicação", dor: "medo de dor, insegurança sobre o valor e vergonha do sorriso",
+    promessa: "atendimento acolhedor, explicação clara do tratamento e avaliação fácil de agendar", tom: "acolhedor, calmo e profissional; nunca infantil",
+    paleta: ["#FFFFFF", "#F3F8FA", "#10242E", "#5A6F7A", "#0E7C9B", "#19B5A5"], fontes: ["Plus Jakarta Sans (600/700)", "Inter (400/500)"],
+    heads: ["Cuidar do sorriso pode ser tranquilo", "Dentista em {cidade} com atendimento sem pressa"], cta: "Agendar avaliação", waMsg: "Olá! Vim pelo site e quero agendar uma avaliação.",
+    servicos: ["Limpeza e prevenção", "Clareamento dental", "Aparelhos e alinhadores", "Implantes dentários", "Lentes e facetas", "Tratamento de canal"],
+    difs: ["Avaliação com explicação completa do plano de tratamento", "Parcelamento facilitado", "Atendimento pontual, sem sala de espera cheia", "Biossegurança e materiais esterilizados a cada consulta"],
+    extras: [["Primeira consulta", "Bloco que explica o que acontece na avaliação em 3 passos (conversa, exame, plano), para tirar o medo de quem nunca foi."]],
+    fotos: [["Hero", "paciente adulta sorrindo de forma natural na cadeira, dentista ao lado fora de foco, consultório claro com luz de janela", "4:5"], ["Serviços", "close de sorriso real, dentes naturais, sem brancura artificial", "1:1"], ["Serviços", "alinhador transparente na mão sobre fundo claro", "1:1"], ["Estrutura", "consultório vazio, cadeira e equipamento alinhados, tons claros", "3:2"], ["Sobre", "retrato do(a) dentista responsável de jaleco, meio corpo, fundo neutro do consultório, olhar para a câmera", "4:5"], ["Recepção", "recepção com balcão e poltronas, planta, ninguém posando", "16:9"]],
+    motion: "Assinatura: um arco suave (como a curva de um sorriso) desenhado em SVG sob o título do hero, traçado em 900 ms ao carregar.",
+    faq: ["A avaliação é paga?", "Vocês parcelam o tratamento?", "Atendem convênio?", "Clareamento dói ou dá sensibilidade?", "Quanto tempo dura um tratamento com aparelho?"],
+    regras: "Odontologia segue o Código de Ética do CFO: não prometer resultado, não anunciar preço ou desconto como chamariz, e só usar antes e depois dentro das regras do conselho e com autorização do paciente. Incluir nome e CRO do responsável técnico no rodapé." },
+
+  { id: "barbearia", re: /barbe/, termo: "barbearia", schema: "HairSalon",
+    publico: "homens de 18 a 45 anos da região que querem corte bem feito, horário marcado e ambiente bom", dor: "esperar em fila e sair com um corte diferente do pedido",
+    promessa: "corte no capricho, com hora marcada e sem espera", tom: "confiante, descontraído, masculino sem clichê",
+    paleta: ["#F7F5F2", "#FFFFFF", "#171514", "#6B645E", "#1F1B18", "#B8732E"], fontes: ["Oswald (500/600)", "Inter (400/500)"],
+    heads: ["Corte no capricho, com hora marcada", "A sua barbearia em {cidade}"], cta: "Agendar horário", waMsg: "Olá! Vim pelo site e quero agendar um horário.",
+    servicos: ["Corte masculino", "Barba completa com toalha quente", "Corte + barba", "Degradê / fade", "Sobrancelha", "Pigmentação e platinado"],
+    difs: ["Agendamento pelo WhatsApp em 1 minuto", "Barbeiros especialistas em degradê", "Ambiente climatizado, com café ou cerveja", "Pontualidade: seu horário é seu"],
+    extras: [["Tabela de serviços", "Lista simples em duas colunas (serviço e duração). Preços só se o cliente confirmar."], ["Equipe", "Cards dos barbeiros com foto, primeiro nome e especialidade."]],
+    fotos: [["Hero", "barbeiro finalizando um degradê com máquina, cliente de perfil na cadeira, luz lateral quente", "4:5"], ["Serviços", "close de navalha fazendo o contorno da barba", "1:1"], ["Serviços", "nuca com degradê recém-feito, acabamento nítido", "1:1"], ["Ambiente", "cadeiras de barbeiro alinhadas e espelhos, sem pessoas", "16:9"], ["Equipe", "retratos dos barbeiros de avental, braços cruzados, fundo da barbearia", "4:5"], ["Detalhe", "bancada com pentes, tesouras e pincel organizados", "3:2"]],
+    motion: "Assinatura: no hover dos cards de serviço, uma linha cor de cobre cresce da esquerda para a direita sob o nome (200 ms), como o passe de uma navalha.",
+    faq: ["Preciso agendar ou posso chegar na hora?", "Quanto tempo dura corte e barba?", "Quais formas de pagamento?", "Atendem crianças?", "Tem estacionamento por perto?"] },
+
+  { id: "pet", re: /\bpet\b|petshop|veterin|banho e tosa|animal|animais/, termo: "pet shop", schema: "PetStore",
+    publico: "tutores de cães e gatos da região que tratam o pet como família", dor: "medo de maus-tratos, estresse do animal e falta de notícias durante o serviço",
+    promessa: "cuidado com carinho, transparência e notícias do pet pelo WhatsApp", tom: "carinhoso, leve e responsável",
+    paleta: ["#FFFDF8", "#F1F7F4", "#1D2B2A", "#617372", "#1F8A70", "#F2A541"], fontes: ["Baloo 2 (600/700)", "Nunito (400/600)"],
+    heads: ["Seu pet cuidado como se fosse nosso", "Banho, tosa e carinho em {cidade}"], cta: "Agendar pelo WhatsApp", waMsg: "Olá! Vim pelo site e quero agendar um horário para o meu pet.",
+    servicos: ["Banho e tosa", "Tosa higiênica e na tesoura", "Consulta veterinária", "Vacinas", "Hidratação e cuidados com a pelagem", "Táxi dog (leva e traz)"],
+    difs: ["Fotos e vídeos do pet durante o atendimento", "Profissionais treinados em manejo sem estresse", "Produtos hipoalergênicos", "Ambiente higienizado a cada atendimento"],
+    extras: [["Para cães e gatos", "Duas colunas com cuidados específicos de cada espécie."]],
+    fotos: [["Hero", "cachorro de porte médio recém-tosado, feliz, olhando para a câmera, fundo claro do pet shop", "4:5"], ["Serviços", "banho em cão com espuma, mãos do profissional com cuidado visível", "1:1"], ["Serviços", "gato calmo sendo escovado sobre a mesa", "1:1"], ["Estrutura", "sala de banho limpa, banheiras e secadores organizados", "3:2"], ["Equipe", "profissional de uniforme abraçando um cão, sorriso natural", "4:5"], ["Galeria", "sequência de pets prontos com lacinho ou bandana", "1:1"]],
+    motion: "Assinatura: pequenas patinhas (SVG) aparecem em sequência atrás do botão principal do hero uma única vez ao carregar (stagger de 120 ms, opacidade até 40%).",
+    faq: ["Preciso agendar o banho?", "Vocês buscam e levam o pet?", "Quanto tempo dura o banho e tosa?", "Atendem gatos?", "Quais vacinas o pet precisa ter?"] },
+
+  { id: "advocacia", re: /advoc|advog|juridic|direito/, termo: "advogado", schema: "LegalService",
+    publico: "pessoas e pequenas empresas com um problema jurídico concreto, procurando alguém confiável para explicar o caminho", dor: "não entender o próprio problema e medo de custo e demora",
+    promessa: "orientação clara, atendimento próximo e acompanhamento do caso", tom: "sóbrio, claro e humano; linguagem simples, sem juridiquês",
+    paleta: ["#FFFFFF", "#F4F3F0", "#14202E", "#5E6875", "#14304F", "#A6844C"], fontes: ["Libre Baskerville (400/700)", "Source Sans 3 (400/600)"],
+    heads: ["Orientação jurídica clara para o seu caso", "Advocacia em {cidade} com atendimento próximo"], cta: "Falar com um advogado", waMsg: "Olá! Vim pelo site e gostaria de falar sobre um caso.",
+    servicos: ["Direito de Família e Sucessões", "Direito Trabalhista", "Direito Previdenciário", "Direito do Consumidor", "Direito Imobiliário", "Direito Empresarial"],
+    difs: ["Primeiro atendimento com explicação do caminho possível", "Acompanhamento do processo com atualizações", "Atendimento presencial e online", "Sigilo profissional"],
+    extras: [["Áreas de atuação", "Grade de cards, cada área com 2 linhas explicando em que situações procurar."], ["Como é o atendimento", "3 passos: contato, análise do caso, proposta de atuação."]],
+    fotos: [["Hero", "advogado(a) em reunião, ouvindo um cliente de costas para a câmera, mesa limpa, luz de janela, roupas sóbrias", "4:5"], ["Sobre", "retrato profissional do(a) advogado(a) responsável, meio corpo, fundo neutro do escritório", "4:5"], ["Escritório", "sala de reunião vazia, mesa, cadeiras e estante discreta", "16:9"], ["Detalhe", "mãos assinando um documento, caneta em foco", "3:2"], ["Fachada", "entrada ou recepção do escritório com a placa", "3:2"]],
+    motion: "Assinatura: nenhuma animação chamativa. Apenas um fio dourado de 1 px que se desenha sob os títulos de seção ao entrarem na tela (400 ms).",
+    faq: ["Como funciona o primeiro atendimento?", "Vocês atendem online?", "Quais documentos preciso levar?", "Como são definidos os honorários?", "Quanto tempo leva um processo?"],
+    regras: "Publicidade na advocacia segue o Provimento 205/2021 da OAB: caráter informativo e discreto. Proibido prometer resultado, citar valores ou gratuidade como chamariz, usar depoimentos de clientes sobre casos, expressões como 'o melhor' ou 'causa ganha', e captação agressiva. No lugar de depoimentos, usar só a nota do Google como dado. Incluir nome do advogado e número da OAB no rodapé." },
+
+  { id: "contabilidade", re: /contab|contador|fiscal|tributar/, termo: "contabilidade", schema: "AccountingService",
+    publico: "donos de pequenas empresas, MEIs e profissionais liberais que querem pagar menos imposto dentro da lei e parar de se preocupar com burocracia", dor: "medo de multa, contador que não responde e imposto alto",
+    promessa: "contabilidade que responde rápido e explica em português claro", tom: "claro, seguro e prático",
+    paleta: ["#FFFFFF", "#F1F5F9", "#0F1E33", "#58677C", "#1D4E89", "#2E9E6B"], fontes: ["Sora (600/700)", "Inter (400/500)"],
+    heads: ["Contabilidade que responde e resolve", "Sua empresa em dia, sem dor de cabeça"], cta: "Falar com um contador", waMsg: "Olá! Vim pelo site e quero saber mais sobre os serviços de contabilidade.",
+    servicos: ["Abertura de empresa", "Contabilidade mensal", "Troca de contador", "Imposto de Renda", "Folha de pagamento", "Planejamento tributário"],
+    difs: ["Resposta no mesmo dia pelo WhatsApp", "Relatórios simples para entender os números", "Troca de contador sem burocracia para você", "Acompanhamento de prazos e obrigações"],
+    extras: [["Para quem é", "3 cards: MEI, pequenas empresas, profissionais liberais; cada um com o que resolve."], ["Trocar de contador", "Bloco explicando em 3 passos que a troca é simples."]],
+    fotos: [["Hero", "contador(a) explicando um relatório no notebook para um empresário, clima de conversa, escritório claro", "4:5"], ["Serviços", "tela de notebook com gráfico simples (genérico, sem marca), mão apontando", "3:2"], ["Sobre", "equipe do escritório reunida em pé, natural, fundo do escritório", "16:9"], ["Detalhe", "mesa organizada com calculadora, caderno e café", "1:1"], ["Fachada", "entrada do escritório com a placa", "3:2"]],
+    motion: "Assinatura: nos números de destaque, contagem animada (0 até o valor em 1,2 s) e um mini gráfico de barras que sobe ao entrar na tela.",
+    faq: ["Como funciona a troca de contador?", "Quanto custa abrir uma empresa?", "Vocês atendem MEI?", "O atendimento é online?", "Qual o melhor regime tributário para mim?"] },
+
+  { id: "imobiliaria", re: /imobili|imoveis|corretor/, termo: "imobiliária", schema: "RealEstateAgent",
+    publico: "pessoas que querem comprar, vender ou alugar um imóvel na região com segurança", dor: "medo de golpe, burocracia e perder tempo com imóveis que não servem",
+    promessa: "imóveis selecionados e acompanhamento do primeiro contato à chave", tom: "confiável, próximo e objetivo",
+    paleta: ["#FFFFFF", "#F3F5F4", "#14211C", "#5F6E68", "#17594A", "#C8973E"], fontes: ["Outfit (500/700)", "Inter (400/500)"],
+    heads: ["O imóvel certo em {cidade}, sem complicação", "Compre, venda ou alugue com quem conhece a região"], cta: "Falar com um corretor", waMsg: "Olá! Vim pelo site e procuro um imóvel.",
+    servicos: ["Venda de imóveis", "Locação residencial", "Locação comercial", "Avaliação de imóvel", "Administração de aluguéis", "Financiamento e documentação"],
+    difs: ["Conhecimento dos bairros da região", "Documentação conferida antes da visita", "Atendimento por WhatsApp fora do horário comercial", "Acompanhamento até a entrega das chaves"],
+    extras: [["Imóveis em destaque", "Grade de 6 cards (foto, bairro, tipo, quartos, metragem) com botão 'Tenho interesse' que abre o WhatsApp citando o imóvel. Usar imóveis reais enviados pelo cliente."], ["Quero vender ou alugar meu imóvel", "Faixa de captação com CTA próprio para proprietários."]],
+    fotos: [["Hero", "sala de estar iluminada de um apartamento real, janela ampla, sem pessoas", "16:9"], ["Destaques", "fachadas e interiores dos imóveis reais do cliente, sempre horizontais e com luz do dia", "3:2"], ["Sobre", "corretor(a) entregando chaves a um casal, foco nas mãos e nas chaves", "3:2"], ["Equipe", "retratos dos corretores, meio corpo, fundo neutro", "4:5"], ["Região", "vista de uma rua ou praça conhecida do bairro", "16:9"]],
+    motion: "Assinatura: nos cards de imóvel, a foto dá um zoom lento (1 para 1,05 em 600 ms) e a etiqueta do bairro desliza 4 px no hover.",
+    faq: ["Como agendar uma visita?", "Quais documentos preciso para alugar?", "Vocês ajudam com financiamento?", "Quanto custa anunciar meu imóvel?", "Atendem quais bairros?"],
+    regras: "Incluir o número do CRECI no rodapé." },
+
+  { id: "academia", re: /academia|crossfit|pilates|fitness|muscula|funcional|studio|box\b|natacao|artes marciais|jiu/, termo: "academia", schema: "ExerciseGym",
+    publico: "moradores da região que querem começar ou voltar a treinar e têm receio de não se adaptar", dor: "vergonha de começar, falta de acompanhamento e desistir no segundo mês",
+    promessa: "acompanhamento de verdade e um ambiente onde dá vontade de voltar", tom: "energético e encorajador, sem culto ao corpo perfeito",
+    paleta: ["#FFFFFF", "#F2F3F5", "#0F1115", "#5C6370", "#C93A0E", "#111827"], fontes: ["Archivo (700/800, largura condensada)", "Inter (400/500)"],
+    heads: ["Comece hoje. A gente acompanha você", "Treino com acompanhamento em {cidade}"], cta: "Agendar aula experimental", waMsg: "Olá! Vim pelo site e quero agendar uma aula experimental.",
+    servicos: ["Musculação", "Treino funcional", "Aulas coletivas", "Avaliação física", "Personal trainer", "Pilates ou alongamento"],
+    difs: ["Aula experimental gratuita", "Professores no salão o tempo todo", "Treino montado para o seu objetivo", "Horários amplos, inclusive cedo e à noite"],
+    extras: [["Planos", "3 cards de plano (mensal, trimestral, anual) sem preço se o cliente não autorizar; CTA 'Consultar valores' no WhatsApp."], ["Horários", "Tabela simples de funcionamento e grade de aulas."]],
+    fotos: [["Hero", "aluna comum (não modelo fitness) fazendo agachamento com professor orientando ao lado, salão ao fundo", "4:5"], ["Estrutura", "salão de musculação amplo, aparelhos alinhados, sem pessoas", "16:9"], ["Aulas", "turma em aula coletiva, energia alta, rostos naturais", "3:2"], ["Detalhe", "mãos com magnésio segurando a barra", "1:1"], ["Equipe", "professores de uniforme lado a lado, sorrindo", "16:9"], ["Recepção", "entrada com catraca e balcão", "3:2"]],
+    motion: "Assinatura: o título do hero entra palavra por palavra de baixo para cima com máscara (60 ms de intervalo), e uma barra de progresso laranja no topo acompanha a rolagem da página.",
+    faq: ["Tem aula experimental?", "Quais os horários de funcionamento?", "Nunca treinei, posso começar?", "Tem estacionamento?", "Como funciona a avaliação física?"] },
+
+  { id: "restaurante", re: /restaur|pizz|hamburg|lanch|\bcafe\b|cafeteria|padaria|confeit|\bbar\b|bistr|sushi|japon|churrasc|doceria|sorvet|acai|pastel|marmit|comida|gastro/, termo: "restaurante", schema: "Restaurant",
+    publico: "moradores e trabalhadores da região decidindo onde comer hoje, quase sempre pelo celular", dor: "não saber o cardápio, o preço médio nem se entrega",
+    promessa: "comida de verdade, cardápio na mão e pedido fácil pelo WhatsApp", tom: "apetitoso, caloroso e direto",
+    paleta: ["#FFFCF7", "#F7EFE3", "#241A12", "#75675A", "#B5371F", "#E0A526"], fontes: ["DM Serif Display (400)", "DM Sans (400/500)"],
+    heads: ["Feito na hora, do jeito que você gosta", "O sabor que {cidade} recomenda"], cta: "Fazer pedido", waMsg: "Olá! Vim pelo site e quero fazer um pedido.",
+    servicos: ["Pratos da casa", "Almoço executivo", "Delivery e retirada", "Sobremesas", "Bebidas", "Encomendas e eventos"],
+    difs: ["Ingredientes frescos, preparo na hora", "Pedido direto pelo WhatsApp, sem taxa de aplicativo", "Entrega rápida na região", "Ambiente para a família"],
+    extras: [["Cardápio", "Seção principal: categorias em abas (ou âncoras) e itens com nome, descrição curta e preço real enviado pelo cliente. Cada item com botão 'Pedir' que abre o WhatsApp já com o nome do prato."], ["Mais pedidos", "Carrossel horizontal com 4 a 6 pratos campeões, fotos grandes."], ["Horário e entrega", "Dias, horários, bairros atendidos e formas de pagamento."]],
+    fotos: [["Hero", "o prato mais vendido da casa visto em ângulo de 45 graus, fumaça leve, mesa de madeira, luz natural lateral", "4:5"], ["Mais pedidos", "cada prato campeão fotografado de cima (flat lay) no mesmo fundo, para a grade ficar uniforme", "1:1"], ["Bastidor", "mãos do cozinheiro finalizando o prato na cozinha", "3:2"], ["Ambiente", "salão com mesas postas, luz quente, sem clientes identificáveis", "16:9"], ["Equipe", "equipe de avental na frente do balcão, sorrindo", "16:9"], ["Fachada", "fachada à noite com o letreiro aceso", "3:2"]],
+    motion: "Assinatura: as fotos dos pratos entram com leve rotação (de -2 graus para 0) e escala (0,96 para 1) em 500 ms; no carrossel, arrastar tem inércia e encaixe (scroll-snap).",
+    faq: ["Vocês fazem entrega? Em quais bairros?", "Qual o horário de funcionamento?", "Aceitam quais formas de pagamento?", "Tem opção vegetariana?", "Fazem encomendas para eventos?"] },
+
+  { id: "obras", re: /construc|reforma|eletricist|encanad|pintor|pintura|marcenar|moveis planejados|vidracar|serralh|material de constru|engenhar|arquitet|gesso|telhado|climatiza|ar.condicionado|dedetiz|limpeza|chaveiro|jardin|piscina/, termo: "empresa de reformas e serviços", schema: "HomeAndConstructionBusiness",
+    publico: "moradores e pequenos comércios que precisam de um serviço bem feito em casa ou no ponto comercial", dor: "profissional que some, obra que atrasa e orçamento que muda no meio",
+    promessa: "orçamento claro, prazo combinado e serviço limpo", tom: "prático, confiável e sem enrolação",
+    paleta: ["#FFFFFF", "#F4F4F1", "#1B1D1F", "#62676C", "#1E3A5F", "#E08A1E"], fontes: ["Rubik (500/700)", "Rubik (400)"],
+    heads: ["Serviço bem feito, no prazo combinado", "Orçamento rápido em {cidade}"], cta: "Pedir orçamento grátis", waMsg: "Olá! Vim pelo site e quero um orçamento.",
+    servicos: ["Orçamento e visita técnica", "Instalação", "Manutenção e reparos", "Reformas completas", "Atendimento de emergência", "Serviços para empresas e condomínios"],
+    difs: ["Orçamento por escrito antes de começar", "Equipe própria e identificada", "Limpeza do local ao terminar", "Garantia do serviço"],
+    extras: [["Trabalhos realizados", "Galeria de antes e depois com controle deslizante (slider) em 3 ou 4 obras reais."], ["Como funciona", "4 passos: contato, visita ou fotos, orçamento, execução."], ["Região atendida", "Lista de bairros e cidades atendidas."]],
+    fotos: [["Hero", "profissional uniformizado trabalhando com ferramenta na mão em um ambiente residencial claro, foco no cuidado", "4:5"], ["Antes e depois", "pares de fotos do mesmo ângulo antes e depois do serviço, mesma luz", "3:2"], ["Serviços", "close das mãos executando o serviço principal do ramo", "1:1"], ["Equipe", "equipe com uniforme e veículo da empresa ao fundo", "16:9"], ["Detalhe", "ferramentas organizadas na maleta", "1:1"]],
+    motion: "Assinatura: o slider de antes e depois se move sozinho uma vez (de 50% para 65% e volta) quando entra na tela, para ensinar o gesto.",
+    faq: ["O orçamento é gratuito?", "Em quanto tempo vocês atendem?", "O serviço tem garantia?", "Atendem quais bairros?", "Quais formas de pagamento?"] },
+
+  { id: "educacao", re: /escola|curso|idioma|ingles|espanhol|autoescola|colegio|reforco|creche|bercario|musica|danca|ballet|informatica|treinamento/, termo: "escola", schema: "EducationalOrganization",
+    publico: "alunos e pais da região comparando opções antes de fazer a matrícula", dor: "medo de pagar e não aprender, e falta de clareza sobre método, horários e valores",
+    promessa: "método claro, turmas pequenas e aula experimental", tom: "motivador, claro e acolhedor",
+    paleta: ["#FFFFFF", "#F2F5FF", "#131A33", "#5A6485", "#2F4BD8", "#F2B33D"], fontes: ["Lexend (500/700)", "Inter (400/500)"],
+    heads: ["Aprenda de verdade, no seu ritmo", "Matrículas abertas em {cidade}"], cta: "Agendar aula experimental", waMsg: "Olá! Vim pelo site e quero agendar uma aula experimental.",
+    servicos: ["Turmas regulares", "Aulas particulares", "Turmas para crianças", "Curso intensivo", "Aulas online", "Preparatório"],
+    difs: ["Aula experimental gratuita", "Turmas pequenas", "Professores qualificados", "Horários flexíveis"],
+    extras: [["Como funciona o método", "3 a 4 passos ilustrados com ícones."], ["Cursos e turmas", "Cards por nível ou idade com horários."]],
+    fotos: [["Hero", "aluno(a) concentrado e sorrindo em sala clara, professor ao fundo fora de foco", "4:5"], ["Salas", "sala de aula vazia, organizada e iluminada", "16:9"], ["Aula", "turma pequena interagindo com o professor", "3:2"], ["Equipe", "professores em frente à escola", "16:9"], ["Fachada", "entrada da escola com a placa", "3:2"]],
+    motion: "Assinatura: os passos do método acendem um a um (número ganha a cor primária) conforme a rolagem.",
+    faq: ["Tem aula experimental?", "Quais os horários das turmas?", "Qual a duração do curso?", "Qual a idade mínima?", "Como funciona a matrícula?"] },
+
+  { id: "bemestar", re: /psicolog|terap|nutri|fisioter|massag|quiropr|acupunt|yoga|fonoaud|osteop|\bspa\b/, termo: "consultório", schema: "MedicalBusiness",
+    publico: "adultos da região que buscam cuidar da saúde física ou emocional com um profissional de confiança", dor: "insegurança em dar o primeiro passo e dúvida se o profissional é o certo",
+    promessa: "atendimento individual, escuta e um plano feito para a pessoa", tom: "sereno, respeitoso e humano",
+    paleta: ["#FBFAF6", "#EFF3EC", "#1F2A24", "#66736B", "#3F7A5E", "#D9A441"], fontes: ["Fraunces (500/600)", "Nunito Sans (400/600)"],
+    heads: ["Um cuidado feito para você", "Atendimento individual em {cidade}"], cta: "Agendar consulta", waMsg: "Olá! Vim pelo site e gostaria de agendar uma consulta.",
+    servicos: ["Primeira consulta e avaliação", "Atendimento individual", "Atendimento online", "Acompanhamento contínuo", "Atendimento para crianças e adolescentes", "Atendimento para casais ou grupos"],
+    difs: ["Atendimento individual e sem pressa", "Consultas presenciais e online", "Sigilo e ética profissional", "Agendamento simples pelo WhatsApp"],
+    extras: [["Como é a primeira consulta", "Texto curto e acolhedor explicando o primeiro encontro em 3 passos."], ["Para quem é", "Lista de situações em que o atendimento ajuda, escrita na voz do paciente."]],
+    fotos: [["Hero", "consultório aconchegante com poltrona, planta e luz natural, sem pessoas", "4:5"], ["Sobre", "retrato do(a) profissional sentado(a), expressão acolhedora, tons neutros", "4:5"], ["Detalhe", "mãos segurando uma xícara ou anotando em um caderno", "1:1"], ["Ambiente", "sala de espera pequena e calma", "3:2"], ["Atendimento", "profissional de costas conversando com paciente não identificável", "3:2"]],
+    motion: "Assinatura: tudo mais lento que o padrão (transições de 500 a 700 ms) e um círculo orgânico de fundo no hero que 'respira' (escala 1 para 1,04 em 6 s, em loop suave).",
+    faq: ["Como funciona a primeira consulta?", "Atende online?", "Qual a duração de cada sessão?", "Aceita convênio ou emite recibo para reembolso?", "Com que frequência são os atendimentos?"],
+    regras: "Profissões de saúde seguem o código de ética do respectivo conselho (CRP, CRN, CREFITO etc.): não prometer cura ou resultado, não usar depoimentos de pacientes como prova (psicologia proíbe) e incluir nome e número de registro do profissional no rodapé." },
+
+  { id: "estetica", re: /estetic|harmoniza|depila|micropigment|sobrancelh|cilios|skin|laser|saude e beleza|rejuvenesc|botox|emagrec/, termo: "clínica de estética", schema: "BeautySalon",
+    publico: "mulheres de 25 a 55 anos da região (e um público masculino crescente) que querem se cuidar com segurança e resultado natural", dor: "medo de resultado artificial e de profissional sem qualificação",
+    promessa: "resultado natural, avaliação individual e profissionais habilitados", tom: "elegante, sereno e seguro; fala de bem-estar, não de defeitos",
+    paleta: ["#FFFBF8", "#F6ECE6", "#2B211E", "#7A6A63", "#9C5B4A", "#C9A27E"], fontes: ["Cormorant Garamond (500/600)", "Jost (400/500)"],
+    heads: ["Sua beleza, com resultado natural", "Estética avançada em {cidade}"], cta: "Agendar avaliação", waMsg: "Olá! Vim pelo site e quero agendar uma avaliação.",
+    servicos: ["Limpeza de pele profunda", "Harmonização facial", "Toxina botulínica", "Preenchimento labial", "Tratamentos corporais", "Depilação a laser"],
+    difs: ["Avaliação individual antes de qualquer procedimento", "Profissionais habilitados", "Produtos e equipamentos com registro na Anvisa", "Acompanhamento após o procedimento"],
+    extras: [["Tratamentos faciais e corporais", "Duas abas ou dois blocos, cada um com cards de tratamento (nome, para quem é indicado, duração média)."], ["Resultados", "Galeria discreta de resultados reais, só se o conselho profissional permitir e com autorização."]],
+    fotos: [["Hero", "mulher de cerca de 35 anos com pele natural e luminosa, perfil três quartos, luz suave de janela, fundo em tom nude; sem aparência de banco de imagens", "4:5"], ["Tratamentos", "close das mãos da profissional com luvas aplicando produto no rosto da cliente, olhos fechados, clima de calma", "1:1"], ["Tratamentos", "equipamento de estética em uso no corpo, enquadramento fechado e elegante", "1:1"], ["Estrutura", "sala de procedimento impecável, maca, toalhas dobradas, tons claros", "3:2"], ["Sobre", "retrato da profissional responsável de jaleco, meio corpo, fundo da clínica", "4:5"], ["Detalhe", "bancada com produtos alinhados e um ramo verde", "1:1"]],
+    motion: "Assinatura: um brilho suave (gradiente claro) atravessa a foto do hero uma vez ao carregar (1,4 s), e as imagens revelam com máscara de baixo para cima (clip-path, 700 ms).",
+    faq: ["Como funciona a avaliação?", "Os procedimentos doem?", "Em quanto tempo vejo o resultado?", "Quanto tempo dura o efeito?", "Quais as formas de pagamento?"],
+    regras: "Estética e saúde: não prometer resultado, não usar termos como 'definitivo' ou 'sem riscos', e só publicar antes e depois conforme as regras do conselho do profissional responsável e com autorização por escrito. Incluir o nome e o registro do responsável técnico no rodapé." },
+
+  { id: "salao", re: /salao|cabelei|beleza|manicure|nail|esmalter|hair|unhas|maquia|penteado/, termo: "salão de beleza", schema: "BeautySalon",
+    publico: "mulheres da região que querem um salão de confiança para cabelo, unhas e produção", dor: "medo de estragar o cabelo e de atraso no atendimento",
+    promessa: "profissionais especialistas, hora marcada e resultado como o combinado", tom: "caloroso, feminino e confiante",
+    paleta: ["#FFF9F9", "#F9ECEE", "#2A1D22", "#7B6770", "#A8456B", "#D9A7B5"], fontes: ["Playfair Display (500/600)", "Poppins (400/500)"],
+    heads: ["Saia do salão do jeito que você imaginou", "Seu salão de confiança em {cidade}"], cta: "Agendar horário", waMsg: "Olá! Vim pelo site e quero agendar um horário.",
+    servicos: ["Corte e escova", "Coloração e mechas", "Tratamentos capilares", "Manicure e pedicure", "Design de sobrancelhas", "Penteado e maquiagem"],
+    difs: ["Avaliação do cabelo antes de qualquer química", "Hora marcada e pontualidade", "Produtos profissionais", "Especialistas em loiros e mechas"],
+    extras: [["Galeria de resultados", "Grade de 6 a 8 fotos reais de clientes (do Instagram do salão), todas no mesmo formato."], ["Dia da noiva", "Faixa opcional para pacotes de noivas e formandas, se o salão oferecer."]],
+    fotos: [["Hero", "cliente de costas ou perfil mostrando o cabelo recém-finalizado com brilho, profissional ajeitando as pontas", "4:5"], ["Serviços", "close de mechas sendo feitas com papel alumínio", "1:1"], ["Serviços", "mãos com unhas recém-feitas, cor clássica, fundo claro", "1:1"], ["Ambiente", "bancadas e espelhos iluminados, sem pessoas", "16:9"], ["Equipe", "equipe do salão junta, uniforme, sorrisos naturais", "16:9"], ["Galeria", "resultados reais em fotos quadradas, mesmo enquadramento", "1:1"]],
+    motion: "Assinatura: a galeria usa efeito de 'espelho': ao passar o cursor, a foto clareia 6% e ganha uma borda fina rosada que se desenha em 300 ms.",
+    faq: ["Preciso agendar com antecedência?", "Fazem avaliação antes da coloração?", "Quais formas de pagamento?", "Atendem noivas e eventos?", "Quanto tempo dura um procedimento de mechas?"] },
+
+  { id: "saude", re: /clinic|medic|consultorio|saude|laborator|oftalmo|dermat|pediatr|cardio|ortoped|ginec|exame|hospital/, termo: "clínica", schema: "MedicalClinic",
+    publico: "pacientes e famílias da região que procuram atendimento médico confiável e fácil de agendar", dor: "demora para conseguir consulta e atendimento apressado",
+    promessa: "consulta com tempo, agendamento simples e equipe atenciosa", tom: "seguro, claro e humano",
+    paleta: ["#FFFFFF", "#F2F6FB", "#12233D", "#5B6B82", "#1F5FBF", "#2BB3A3"], fontes: ["Manrope (600/700)", "Inter (400/500)"],
+    heads: ["Cuidado médico com tempo para ouvir você", "Agende sua consulta em {cidade}"], cta: "Agendar consulta", waMsg: "Olá! Vim pelo site e quero agendar uma consulta.",
+    servicos: ["Consultas", "Exames", "Check-up", "Retornos e acompanhamento", "Atendimento infantil", "Telemedicina"],
+    difs: ["Agendamento rápido pelo WhatsApp", "Consultas sem pressa", "Equipe qualificada", "Estrutura moderna e acessível"],
+    extras: [["Especialidades", "Grade de cards com as especialidades reais da clínica."], ["Convênios", "Lista em texto dos convênios aceitos, só os confirmados pelo cliente."]],
+    fotos: [["Hero", "médico(a) conversando com paciente sentado, ambos à vontade, consultório claro", "4:5"], ["Estrutura", "consultório ou sala de exame vazia e organizada", "3:2"], ["Recepção", "recepção com atendente sorrindo ao balcão", "16:9"], ["Equipe", "retratos dos profissionais de jaleco, fundo neutro", "4:5"], ["Fachada", "entrada da clínica com a placa", "3:2"]],
+    motion: "Assinatura: uma linha de batimento (SVG) discreta se desenha uma única vez sob o título do hero (1 s) e depois fica estática.",
+    faq: ["Como agendar uma consulta?", "Quais convênios são aceitos?", "Qual o horário de atendimento?", "Fazem atendimento online?", "O que levar na primeira consulta?"],
+    regras: "Publicidade médica segue a Resolução CFM 2.336/2023: informar nome, CRM e RQE do diretor técnico, não prometer resultado e não usar sensacionalismo. Antes e depois só dentro das regras da resolução." },
+
+  { id: "varejo", re: /loja|otica|farmac|boutique|moda|roupa|calcad|joalher|moveis|floricultura|papelaria|presentes|brecho|cosmet|perfum|celular|eletron|bicicle|mercado|emporio|adega/, termo: "loja", schema: "Store",
+    publico: "moradores da região que preferem comprar perto de casa, com atendimento de verdade", dor: "não saber o que a loja tem, o preço e se vale a ida",
+    promessa: "produtos selecionados e atendimento rápido pelo WhatsApp", tom: "próximo, simples e convidativo",
+    paleta: ["#FFFFFF", "#F5F3F0", "#1C1A18", "#6C665F", "#2B2B2B", "#C2553B"], fontes: ["Bricolage Grotesque (600/700)", "Inter (400/500)"],
+    heads: ["O que você procura, perto de você", "Sua loja em {cidade}, agora também no WhatsApp"], cta: "Chamar no WhatsApp", waMsg: "Olá! Vim pelo site e quero saber sobre um produto.",
+    servicos: ["Novidades", "Mais vendidos", "Promoções", "Encomendas", "Entrega na região", "Atendimento personalizado"],
+    difs: ["Atendimento rápido pelo WhatsApp", "Entrega ou retirada na loja", "Troca facilitada", "Parcelamento no cartão"],
+    extras: [["Vitrine", "Grade de 8 produtos reais (foto, nome, preço opcional) com botão 'Quero este' que abre o WhatsApp citando o produto."], ["Categorias", "Faixa de categorias em chips ou cards com foto."]],
+    fotos: [["Hero", "interior da loja com produtos bem expostos, luz clara, um atendente ao fundo", "16:9"], ["Vitrine", "produtos reais fotografados no mesmo fundo neutro, mesma luz, quadrados", "1:1"], ["Detalhe", "mãos embalando uma compra com capricho", "3:2"], ["Equipe", "equipe atrás do balcão", "16:9"], ["Fachada", "fachada com a vitrine iluminada", "3:2"]],
+    motion: "Assinatura: nos cards da vitrine, o botão 'Quero este' sobe 8 px e aparece no hover (no celular fica sempre visível).",
+    faq: ["Vocês entregam?", "Quais formas de pagamento?", "Como funciona a troca?", "Qual o horário da loja?", "Fazem encomenda de produtos?"] },
+
+  { id: "generico", re: /.*/, termo: "empresa", schema: "LocalBusiness",
+    publico: "moradores e empresas da região que procuram esse serviço no Google e comparam duas ou três opções", dor: "não saber em quem confiar e demora para conseguir resposta",
+    promessa: "atendimento rápido, serviço bem feito e contato fácil", tom: "claro, profissional e próximo",
+    paleta: ["#FFFFFF", "#F4F6F5", "#17201D", "#5F6B66", "#1F6F5C", "#D9903D"], fontes: ["Plus Jakarta Sans (600/700)", "Inter (400/500)"],
+    heads: ["Atendimento de confiança em {cidade}", "Fale com a gente e resolva hoje"], cta: "Falar no WhatsApp", waMsg: "Olá! Vim pelo site e gostaria de mais informações.",
+    servicos: ["Serviço principal 1", "Serviço principal 2", "Serviço principal 3", "Atendimento para empresas", "Orçamentos", "Suporte e acompanhamento"],
+    difs: ["Resposta rápida pelo WhatsApp", "Atendimento personalizado", "Experiência no ramo", "Compromisso com prazo e qualidade"],
+    extras: [["Como funciona", "3 passos: contato, proposta, entrega."]],
+    fotos: [["Hero", "profissional da empresa em ação, atendendo um cliente no ambiente real do negócio", "4:5"], ["Serviços", "close do serviço ou produto principal sendo feito ou entregue", "1:1"], ["Ambiente", "espaço da empresa organizado, sem pessoas", "16:9"], ["Equipe", "equipe reunida, natural, com uniforme ou identidade da empresa", "16:9"], ["Fachada", "fachada com a placa", "3:2"]],
+    motion: "Assinatura: um sublinhado na cor de acento que se desenha sob a palavra mais importante do título do hero (500 ms, depois da entrada do texto).",
+    faq: ["Como peço um orçamento?", "Qual o horário de atendimento?", "Quais formas de pagamento?", "Atendem quais regiões?", "Em quanto tempo recebo retorno?"] },
+];
+function perfil(l) {
+  const alvo = semAcento(`${l.categoria || ""} ${NICHOS[l.nicho]?.[0] || ""} ${l.nome || ""}`);
+  return PERFIS.find((p) => p.re.test(alvo));
+}
+
+// ---------- mensagens prontas ----------
+function msgOla(l, tipo = cfg.msgTipo || "curta") {
+  const emp = nomeCurto(l), v = hashN(l.id || l.nome, 3), p = perfil(l), o = ondeFica(l);
+  const eu = cfg.nome ? `Aqui é ${cfg.nome}. ` : "";
+  const nota = l.nota ? String(l.nota).replace(".", ",") : "";
+  const gancho = l.avaliacoes >= 30 && nota ? `Vi vocês no Google: nota ${nota} com ${l.avaliacoes} avaliações, parabéns!`
+    : l.instagram ? `Vi o Instagram de vocês (${l.instagram}) e gostei do trabalho.` : "Encontrei vocês no Google Maps.";
+  const oi = ["Olá! Tudo bem?", "Oi, tudo bem?", "Olá, tudo bem por aí?"][v];
+  if (tipo === "curta") {
+    const pergunta = ["Consigo falar rapidinho com quem cuida da divulgação?", "Quem é a pessoa responsável pelo marketing aí? Tenho uma ideia rápida para vocês.", "Posso falar com o responsável? É rápido, sobre como vocês aparecem no Google."][v];
+    return `${oi} ${eu}Falo com ${emp}?\n\n${gancho} ${pergunta}`;
+  }
+  const oferta = cfg.oferta || "Eu crio sites rápidos e acessíveis para negócios locais.";
+  const fecho = ["Posso te mostrar um exemplo de como ficaria o de vocês, sem compromisso?", "Quer que eu monte uma prévia gratuita para vocês verem?", "Posso mandar uma ideia de como ficaria? É sem compromisso."][v];
+  if (l.siteTipo === "proprio") return `${oi} ${eu}Falo com ${emp}?\n\n${gancho} Dei uma olhada no site de vocês e tenho algumas ideias para ele trazer mais contatos pelo Google e pelo WhatsApp.\n\n${oferta} ${fecho}`;
+  const falta = l.siteTipo === "rede_social" ? "Mas notei que vocês ainda não têm um site próprio, só as redes sociais." : "Mas não encontrei um site de vocês.";
+  return `${oi} ${eu}Falo com ${emp}?\n\n${gancho} ${falta}\n\nMuita gente pesquisa por ${p.termo}${o.cidade ? " em " + o.cidade : ""} no Google antes de escolher, e um site simples faz vocês aparecerem nessas buscas e passa mais confiança.\n\n${oferta} ${fecho}`;
+}
+function msgRetorno(l) {
+  const v = hashN(l.id || l.nome, 2);
+  return [`Oi, tudo bem? ${cfg.nome ? "Aqui é " + cfg.nome + " de novo. " : ""}Mandei uma mensagem há alguns dias sobre o site de ${nomeCurto(l)}. Conseguiu ver? Se preferir, monto uma prévia para vocês avaliarem, sem compromisso.`,
+    `Olá! ${cfg.nome ? "Aqui é " + cfg.nome + ". " : ""}Passando só para saber se você viu minha mensagem sobre o site de ${nomeCurto(l)}. Posso te mandar um exemplo pronto para dar uma olhada?`][v];
+}
+const linkWa = (l, texto) => { const n = numeroWhats(l.whatsapp || l.telefone); return n ? `https://wa.me/${n}?text=${encodeURIComponent(texto)}` : ""; };
+
+let msgLimite = 30, msgSujo = false;
+const filaMsgs = () => Object.values(leads).filter((l) => l.etapa === "novo" && numeroWhats(l.whatsapp || l.telefone)).sort((a, b) => b.score - a.score);
+function renderMsgs() {
+  const box = $("#listaMsgs");
+  if (box.contains(document.activeElement) && document.activeElement.tagName === "TEXTAREA") { msgSujo = true; return; }
+  msgSujo = false;
+  const fila = filaMsgs(), semTel = Object.values(leads).filter((l) => l.etapa === "novo" && !numeroWhats(l.whatsapp || l.telefone)).length;
+  $("#msgTipo").value = cfg.msgTipo || "curta";
+  $("#msgInfo").textContent = fila.length ? `${fila.length} leads prontos para o primeiro contato, do mais quente ao mais frio.` : "";
+  $("#msgIA").disabled = !fila.length;
+  if (!fila.length) {
+    box.innerHTML = `<div class="empty"><h3>Nenhuma mensagem na fila</h3><p>Aqui aparecem os leads da etapa "Novo" que têm WhatsApp ou telefone, cada um com a mensagem pronta. Importe leads do PC na aba Encontrar.${semTel ? ` Há ${semTel} leads sem telefone no Funil.` : ""}</p><button class="btn primary" data-goto="buscar">Importar leads</button></div>`;
+    return;
+  }
+  box.innerHTML = fila.slice(0, msgLimite).map((l, i) => {
+    const texto = l.mensagem || msgOla(l);
+    return `<article class="msg" data-id="${esc(l.id)}">
+      <div class="lead-h"><div><h4>${i + 1}. ${esc(l.nome)}</h4><div class="meta"><span>${esc(rotulo(l))}${ondeFica(l).bairro ? " · " + esc(ondeFica(l).bairro) : ""} · ${esc(telBR(l.whatsapp || l.telefone))}</span></div></div>${pill(l.score)}</div>
+      <div class="s">${semSiteTag(l)}${l.mensagem ? '<span class="ch on">EDITADA</span>' : ""}</div>
+      <textarea rows="${cfg.msgTipo === "completa" ? 8 : 4}" aria-label="Mensagem para ${esc(l.nome)}">${esc(texto)}</textarea>
+      <div class="actions"><a class="btn wa" target="_blank" rel="noopener" href="${esc(linkWa(l, texto))}" data-enviar>Enviar no WhatsApp ↗</a>
+        <button class="btn sm" data-copiar>Copiar</button><button class="btn sm" data-prompt>Prompt do site</button><button class="btn sm ghost" data-detalhe>Detalhes</button></div></article>`;
+  }).join("") + (fila.length > msgLimite ? `<button class="btn" id="msgMais">Mostrar mais ${Math.min(30, fila.length - msgLimite)}</button>` : "")
+    + (semTel ? `<p class="hint-s">${semTel} leads novos não têm telefone e ficaram fora desta lista. Veja no Funil.</p>` : "");
+}
+$("#listaMsgs").addEventListener("input", (e) => {
+  const card = e.target.closest(".msg"); if (!card || e.target.tagName !== "TEXTAREA") return;
+  const l = leads[card.dataset.id]; if (l) card.querySelector("[data-enviar]").href = linkWa(l, e.target.value);
+});
+$("#listaMsgs").addEventListener("focusout", (e) => {
+  const card = e.target.closest(".msg"); if (!card || e.target.tagName !== "TEXTAREA") return;
+  const l = leads[card.dataset.id];
+  setTimeout(() => {
+    if (l && e.target.value !== (l.mensagem || msgOla(l))) salvarLead({ ...l, mensagem: e.target.value });
+    else if (msgSujo) renderMsgs();
+  }, 250);
+});
+$("#listaMsgs").addEventListener("click", async (e) => {
+  if (e.target.id === "msgMais") { msgLimite += 30; renderMsgs(); return; }
+  const card = e.target.closest(".msg"); if (!card) return;
+  const l = leads[card.dataset.id]; if (!l) return;
+  const texto = card.querySelector("textarea").value;
+  if (e.target.closest("[data-enviar]")) {
+    setTimeout(() => { const n = { ...l, mensagem: texto }; moverEtapa(n, "contatado"); salvarLead(n); toast(`${nomeCurto(l)}: marcado como Contatado, retorno em ${br(n.followup)}`); }, 400);
+  } else if (e.target.closest("[data-copiar]")) {
+    try { await navigator.clipboard.writeText(texto); toast("Mensagem copiada"); } catch { card.querySelector("textarea").select(); toast("Texto selecionado: copie manualmente"); }
+  } else if (e.target.closest("[data-prompt]")) abrirPrompt(l.id);
+  else if (e.target.closest("[data-detalhe]")) abrir(l.id);
+});
+$("#msgTipo").addEventListener("change", () => { cfg.msgTipo = $("#msgTipo").value; salvarCfg(); renderMsgs(); });
+$("#msgIA").addEventListener("click", async () => {
+  const st = $("#msgStatus"); st.classList.remove("err");
+  const sample = await getSample();
+  if (!sample) { st.textContent = "A IA só funciona com esta página aberta no Claude. As mensagens prontas continuam valendo."; st.classList.add("err"); return; }
+  const lote = filaMsgs().filter((l) => !l.mensagem).slice(0, 20);
+  if (!lote.length) { st.textContent = "Todas as mensagens visíveis já foram personalizadas ou editadas."; return; }
+  const btn = $("#msgIA"); btn.disabled = true; st.textContent = `Escrevendo ${lote.length} mensagens sob medida…`;
+  const dados = lote.map((l) => ({ id: l.id, empresa: nomeCurto(l), ramo: rotulo(l) || perfil(l).termo, bairro: ondeFica(l).bairro || null, cidade: ondeFica(l).cidade || null,
+    nota_google: l.nota, avaliacoes: l.avaliacoes, instagram: l.instagram || null, site: l.siteTipo === "proprio" ? "tem site próprio" : l.siteTipo === "rede_social" ? "só rede social" : "não tem site" }));
+  const estilo = (cfg.msgTipo || "curta") === "curta"
+    ? "Mensagem CURTA de primeiro contato (até 45 palavras): cumprimenta, confirma se está falando com a empresa, cita UM detalhe real dos dados e pede para falar com o responsável. Não ofereça nada ainda."
+    : "Mensagem COMPLETA (até 85 palavras): cumprimenta, cita um detalhe real, aponta a situação do site, mostra um benefício concreto para aquele ramo e termina oferecendo mostrar um exemplo sem compromisso.";
+  try {
+    const out = await sample.json(
+      `Você escreve mensagens de WhatsApp para um profissional que cria sites e está abordando negócios locais brasileiros pela primeira vez.\n${estilo}\n` +
+      `Regras: português do Brasil, tom humano e educado, sem parecer robô ou spam, no máximo um emoji, sem promessas exageradas, cada mensagem com abertura e estrutura diferentes das outras. Use só os dados fornecidos, nunca invente.\n` +
+      `Remetente: ${cfg.nome || "(não informado; não assine)"}. Oferta: ${cfg.oferta || "criação de sites para negócios locais"}.\n` +
+      `Responda só com um array JSON de objetos {"id": string, "mensagem": string}, um por empresa, na mesma ordem.\n\nEMPRESAS:\n${JSON.stringify(dados)}`,
+      { modelTier: "default", effort: "low", cache: false });
+    let n = 0;
+    for (const x of Array.isArray(out) ? out : []) {
+      const l = leads[x?.id];
+      if (l && typeof x.mensagem === "string" && x.mensagem.trim()) { salvarLead({ ...l, mensagem: x.mensagem.trim().slice(0, 1500) }); n++; }
+    }
+    st.textContent = n ? `${n} mensagens personalizadas. Revise antes de enviar.` : "A IA não devolveu mensagens. Tente de novo.";
+  } catch (e) { st.textContent = erroIA(e?.code); st.classList.add("err"); }
+  finally { btn.disabled = false; }
+});
+
+// ---------- prompt gigante do site ----------
+const RATIO = { "4:5": "vertical 4:5", "1:1": "quadrada 1:1", "3:2": "horizontal 3:2", "16:9": "horizontal 16:9" };
+function promptSite(l) {
+  const p = perfil(l), o = ondeFica(l), ia = l.siteIA || null;
+  const emp = nomeCurto(l), cidade = o.cidade || "[CIDADE]", regiao = [o.bairro, o.cidade].filter(Boolean).join(", ") || "[BAIRRO, CIDADE]";
+  const emRegiao = o.bairro ? `em ${cidade}, no bairro ${o.bairro}` : `em ${cidade}`;
+  const ramo = rotulo(l) || p.termo, semDepo = p.id === "advocacia" || p.id === "bemestar";
+  const wa = numeroWhats(l.whatsapp || l.telefone), CONF = "[CONFIRMAR COM O CLIENTE]";
+  const waLink = (msg) => wa ? `https://wa.me/${wa}?text=${encodeURIComponent(msg)}` : `[LINK DO WHATSAPP, ${CONF}]`;
+  const nota = l.nota ? String(l.nota).replace(".", ",") : "";
+  const temNota = l.nota && l.avaliacoes >= 5;
+  const [bg, surface, ink, muted, primary, accent] = p.paleta;
+  const heads = (ia?.headlines?.length ? ia.headlines : p.heads.map((h) => h.replace("{cidade}", cidade)));
+  const sub = ia?.subheadline || `${p.promessa.charAt(0).toUpperCase() + p.promessa.slice(1)}. ${o.bairro ? `Atendemos no bairro ${o.bairro} e região.` : `Atendemos em ${cidade} e região.`}`;
+  const servicos = ia?.servicos?.length ? ia.servicos.map((s) => `- **${s.nome}**: ${s.descricao}`) : p.servicos.map((s) => `- **${s}**: [descrição de 1 linha focada no benefício para o cliente]`);
+  const difs = ia?.diferenciais?.length ? ia.diferenciais.map((d) => `- **${d.titulo}**: ${d.texto}`) : p.difs.map((d) => `- ${d}`);
+  const faq = ia?.faq?.length ? ia.faq.map((f) => `- **${f.pergunta}** ${f.resposta}`) : p.faq.map((q) => `- **${q}** [escrever resposta curta e direta; confirmar com o cliente]`);
+  const fotosRamo = p.fotos.concat(ia?.fotos?.length ? ia.fotos.map((f) => ["Extra desta empresa", f, "3:2"]) : []);
+  const jsonld = { "@context": "https://schema.org", "@type": p.schema, name: l.nome, ...(l.endereco ? { address: { "@type": "PostalAddress", streetAddress: l.endereco, addressLocality: o.cidade || undefined, addressRegion: o.uf || undefined, addressCountry: "BR" } } : {}),
+    ...(l.telefone || wa ? { telephone: "+" + (wa || numeroWhats(l.telefone)) } : {}), ...(l.email ? { email: l.email } : {}), url: "[URL FINAL DO SITE]", image: "[URL DA FOTO DO HERO]",
+    ...(l.instagram ? { sameAs: ["https://instagram.com/" + l.instagram.replace("@", "")] } : {}), ...(l.mapsUrl ? { hasMap: l.mapsUrl } : {}), openingHours: "[HORÁRIOS, ex.: Mo-Fr 09:00-18:00]" };
+  const L = [];
+  const add = (...x) => L.push(...x);
+
+  add(`# PROMPT: site de vendas para ${l.nome}`, "",
+    `Você é um time sênior de criação de sites: estrategista de conversão, redator, diretor de arte, motion designer e desenvolvedor front-end. Crie um site de UMA página (landing page) para a empresa abaixo. O site é clean, básico e feito para vender: o único objetivo é levar o visitante a chamar a empresa no WhatsApp. Siga este briefing à risca e entregue o site completo, pronto para publicar.`, "",
+    `## 1. A empresa (dados reais: use exatamente como estão)`,
+    `- **Nome:** ${l.nome}${emp !== l.nome ? ` (nome curto para o logo e o menu: "${emp}")` : ""}`,
+    `- **Ramo:** ${ramo}`,
+    `- **Endereço:** ${l.endereco || CONF}`,
+    `- **Região de atuação:** ${regiao}`,
+    `- **Telefone:** ${telBR(l.telefone) || CONF}`,
+    `- **WhatsApp:** ${wa ? telBR(wa) + (l.whatsappFonte === "celular" ? " (provável; confirmar)" : "") : CONF}`,
+    `- **E-mail:** ${l.email || "não informado (não exibir)"}`,
+    `- **Instagram:** ${l.instagram || "não informado (não exibir)"}`,
+    `- **Google:** ${temNota ? `nota ${nota} com ${l.avaliacoes} avaliações` : "sem avaliações suficientes (não exibir nota)"}${l.mapsUrl ? `\n- **Ficha no Google Maps:** ${l.mapsUrl}` : ""}`,
+    `- **Situação atual:** ${l.siteTipo === "proprio" ? `já tem um site (${l.site}); este projeto é um redesenho focado em conversão` : l.siteTipo === "rede_social" ? "não tem site próprio, só redes sociais; este será o primeiro site" : "não tem site; este será o primeiro site"}`,
+    "", `**Regra de ouro:** não invente nenhum fato sobre a empresa (anos de experiência, prêmios, preços, nomes de pessoas, convênios, número de clientes). Onde faltar um dado, escreva o marcador \`${CONF}\` no lugar, para eu preencher depois.`, "");
+
+  add(`## 2. Estratégia`,
+    `- **Público:** ${p.publico}.`, `- **Principal dor:** ${p.dor}.`, `- **Promessa central:** ${p.promessa}.`,
+    `- **Posicionamento:** ${ia?.posicionamento || `${emp} é a opção de confiança ${emRegiao} para quem procura ${p.termo}: ${p.promessa}.`}`,
+    `- **Tom de voz:** ${p.tom}. Frases curtas, voz ativa, "você" e "a gente". Sem clichês como "excelência", "soluções" ou "qualidade e compromisso".`,
+    `- **Ação única:** todo botão leva ao WhatsApp. Não há formulário longo, login, blog nem carrinho.`,
+    `- **Visitante típico:** chega pelo Google ou Instagram, no celular, com pressa. Em 5 segundos ele precisa entender o que a empresa faz, onde fica e como chamar.`, "");
+  if (p.regras) add(`### Regras do setor (obrigatórias)`, p.regras, "");
+
+  add(`## 3. Estrutura da página (nesta ordem)`,
+    `**3.1 Cabeçalho fixo.** Logo em texto ("${emp}", fonte de título) à esquerda. Menu com âncoras: Serviços, Sobre, Avaliações, Dúvidas, Contato. Botão "${p.cta}" à direita. No celular: logo, botão compacto de WhatsApp e menu hambúrguer que abre em tela cheia.`, "",
+    `**3.2 Hero (primeira dobra).** Duas colunas no desktop (texto 55%, foto 45%); no celular, texto primeiro e foto abaixo.`,
+    `- Etiqueta pequena acima do título: "${ramo} ${emRegiao}".`,
+    `- Título H1 (escolha a melhor; as outras ficam como alternativa em comentário): ${heads.map((h) => `"${h}"`).join(" | ")}.`,
+    `- Subtítulo: "${sub}"`,
+    `- Botão principal: "${p.cta}" com ícone do WhatsApp. Link: ${waLink(p.waMsg)}`,
+    `- Botão secundário (contorno): "Ver serviços", rola até a seção.`,
+    temNota ? `- Selo de prova logo abaixo dos botões: 5 estrelas, "${nota} no Google" e "${l.avaliacoes} avaliações".` : `- Linha de confiança abaixo dos botões com 3 itens curtos e ícones (ex.: atendimento rápido, ${o.bairro ? "no bairro " + o.bairro : "na sua região"}, agendamento pelo WhatsApp).`,
+    `- Foto: ver item "Hero" da lista de fotos.`, "",
+    `**3.3 Faixa de confiança.** Uma linha com 3 ou 4 destaques curtos com ícone${temNota ? `, o primeiro sendo "${nota} ★ no Google"` : ""}. Fundo na cor de superfície.`, "",
+    `**3.4 Serviços.** Título: "O que a gente faz por você". Grade de cards (3 colunas no desktop, 1 no celular). Cada card: ícone de linha, nome, 1 linha de benefício e link "Quero saber mais" que abre o WhatsApp já citando o serviço. ${ia?.servicos?.length ? "Serviços:" : "Sugestões do ramo (confirmar com o cliente quais ele realmente oferece):"}`,
+    ...servicos, "",
+    `**3.5 Diferenciais.** Título: "Por que escolher ${emp}". Duas colunas: foto à esquerda, lista de 4 diferenciais com ícone de check à direita.`,
+    ...difs, "");
+  p.extras.forEach(([t, d], i) => add(`**3.${6 + i} ${t}.** ${d}`, ""));
+  let n = 6 + p.extras.length;
+  add(`**3.${n++} Avaliações.** Título: "Quem conhece, recomenda". ${semDepo ? "Por regra do setor, não usar depoimentos de clientes: esta seção mostra só os dados públicos do Google." : "Três cards com avaliações reais copiadas da ficha do Google (nome, texto e 5 estrelas). Não inventar depoimentos: deixar os 3 cards com o marcador " + CONF + " até eu colar os textos reais."} ${temNota ? `${semDepo ? "Destaque" : "Acima dos cards, destaque"} grande: "${nota}" com estrelas e "${l.avaliacoes} avaliações no Google".` : ""}${l.mapsUrl ? ` Botão: "Ver todas no Google" (${l.mapsUrl}).` : ""}`, "",
+    `**3.${n++} Sobre.** Título: "Sobre ${emp}". Texto de até 80 palavras, em primeira pessoa do plural, com uma foto da equipe ou do responsável. ${ia?.sobre ? `Texto: "${ia.sobre}"` : `Conteúdo: como a empresa atende, o que valoriza e a ligação com a região (${regiao}). Fatos específicos: ${CONF}.`}`, "",
+    `**3.${n++} Dúvidas frequentes.** Acordeão com 5 perguntas, a primeira já aberta.`, ...faq, "",
+    `**3.${n++} Localização e horário.** Duas colunas: à esquerda, endereço completo, horários (${CONF}), telefone e botão "Como chegar"${l.mapsUrl ? ` (${l.mapsUrl})` : ""}; à direita, mapa incorporado do Google Maps com o endereço. No celular o mapa vem depois do texto.`, "",
+    `**3.${n++} Chamada final.** Faixa de largura total na cor primária, texto claro. Título: "Pronto para ${p.cta.toLowerCase()}?" Subtítulo: "Chame agora no WhatsApp. A gente responde rápido." Botão grande em cor clara: "${p.cta}".`, "",
+    `**3.${n++} Rodapé.** Nome, endereço, telefone${l.instagram ? ", Instagram (" + l.instagram + ")" : ""}, links das seções, ano atual e "Todos os direitos reservados". ${p.regras ? "Incluir os registros profissionais exigidos (ver Regras do setor)." : ""} Link discreto "Política de privacidade".`, "",
+    `**3.${n++} Botão flutuante de WhatsApp.** Fixo no canto inferior direito em todas as telas. Link: ${waLink(p.waMsg)}`, "");
+
+  add(`## 4. Textos (copy)`,
+    `- Escreva todos os textos finais em português do Brasil. Nada de lorem ipsum.`,
+    `- Títulos de seção com no máximo 6 palavras. Parágrafos com no máximo 3 linhas.`,
+    `- Botões sempre com verbo e resultado: "${p.cta}", "Chamar no WhatsApp", "Ver serviços". Nunca "Saiba mais" ou "Clique aqui".`,
+    `- Cada botão de WhatsApp leva uma mensagem pré-preenchida diferente, para o dono saber de onde veio o contato. Ex.: hero "${p.waMsg}"; card de serviço "Olá! Vim pelo site e quero saber sobre [nome do serviço]."; chamada final "Olá! Vim pelo site e quero ${p.cta.toLowerCase()}."`,
+    `- Cite ${o.bairro ? `o bairro ${o.bairro} e ` : ""}a cidade ${cidade} de forma natural no hero, no Sobre e na Localização (ajuda no Google).`, "");
+
+  add(`## 5. Direção de arte`,
+    `Estilo clean e básico: muito espaço em branco, poucos elementos, hierarquia clara. Nada de gradientes chamativos, sombras pesadas, texturas ou ícones 3D.`,
+    `**Cores (use como variáveis CSS):**`,
+    `- Fundo: ${bg}`, `- Superfície (seções alternadas e cards): ${surface}`, `- Texto principal: ${ink}`, `- Texto secundário: ${muted}`,
+    `- Primária (botões, links, destaques): ${primary}, com texto branco`, `- Acento (detalhes pequenos: estrelas, sublinhados, ícones): ${accent}; usar em no máximo 10% da tela`,
+    `- Botão do WhatsApp flutuante: verde #25D366 com ícone branco`,
+    `- Proporção: 70% fundo e superfície, 20% texto, 10% primária e acento.`,
+    `**Tipografia (Google Fonts):**`,
+    `- Títulos: ${p.fontes[0]}`, `- Texto: ${p.fontes[1]}`,
+    `- Escala desktop: H1 56 px (altura de linha 1,05), H2 36 px, H3 22 px, texto 17 px (altura de linha 1,6), legendas 14 px. Celular: H1 36 px, H2 28 px, H3 20 px, texto 16 px.`,
+    `- Largura máxima de leitura: 62 caracteres.`,
+    `**Layout:**`,
+    `- Container de 1140 px, grade de 12 colunas, espaço lateral de 24 px no celular.`,
+    `- Seções com 96 px de respiro vertical no desktop e 64 px no celular. Alternar fundo e superfície entre seções.`,
+    `- Cards: raio de 16 px, borda de 1 px em tom claro, sem sombra em repouso. Botões: raio de 12 px, altura de 52 px, texto 16 px peso 600.`,
+    `- Ícones: estilo de linha, traço de 1,5 px, todos da mesma família (ex.: Lucide ou Phosphor).`,
+    `- Imagens com raio de 20 px. A foto do hero pode ter um bloco de cor de superfície deslocado atrás (12 px) como único enfeite.`,
+    cfg.refs ? `**Referências visuais indicadas por mim (seguir o nível de limpeza e a estrutura, sem copiar):**\n${cfg.refs.split(/\n+/).filter(Boolean).map((r) => "- " + r.trim()).join("\n")}` : "",
+    cfg.estilo ? `**Observações de estilo:** ${cfg.estilo}` : "", "");
+
+  add(`## 6. Fotos (lista exata)`,
+    `Prioridade: 1) fotos reais da empresa (pedir ao cliente${l.instagram ? " ou usar as do Instagram " + l.instagram + ", com autorização" : ""}); 2) fotos da ficha do Google; 3) só na falta delas, gerar por IA com os prompts abaixo e trocar pelas reais depois.`,
+    `Padrão para todas: luz natural e suave, cores fiéis, sem filtro pesado, sem texto sobre a imagem, sem pose de banco de imagens. Pessoas com aparência brasileira e real. Exportar em WebP, até 200 KB cada, com texto alternativo descritivo.`, "");
+  fotosRamo.forEach(([onde, desc, r], i) => add(`**Foto ${i + 1} · ${onde}** (${RATIO[r] || r})`,
+    `- O que mostrar: ${desc}.`,
+    `- Texto alternativo: "${desc.split(",")[0].charAt(0).toUpperCase() + desc.split(",")[0].slice(1)} · ${emp}, ${cidade}".`,
+    `- Prompt para gerar por IA: "Fotografia realista, ${desc}, ambiente brasileiro, luz natural suave, lente 35 mm, profundidade de campo curta, paleta com tons de ${surface} e ${primary}, sem texto, sem logotipos, sem marca d'água, proporção ${r}".`, ""));
+  add(`**Foto extra · Fachada real.** Usar a foto da fachada da ficha do Google na seção Localização, para o visitante reconhecer o lugar ao chegar.`, "");
+
+  add(`## 7. Motion (animações, uma a uma)`,
+    `Princípio: movimento discreto que guia o olhar e dá sensação de capricho. Nada pisca, quica ou gira. Animar apenas \`transform\` e \`opacity\`. Curva padrão: cubic-bezier(0.22, 1, 0.36, 1).`,
+    `- **Carregamento do hero (sequência única):** etiqueta surge (opacidade 0 para 1, sobe 8 px, 400 ms); 100 ms depois o H1 entra linha por linha com máscara (sobe 100% da altura da linha, 600 ms, 80 ms entre linhas); em 350 ms o subtítulo (400 ms); em 500 ms os botões (sobem 12 px, 400 ms, 80 ms entre eles); a foto começa junto com o H1 (escala 1,06 para 1 e opacidade 0 para 1, 900 ms).`,
+    temNota ? `- **Selo do Google:** as 5 estrelas preenchem da esquerda para a direita (80 ms cada) e a nota conta de 0,0 até ${nota} em 1,2 s.` : "",
+    `- **Cabeçalho:** transparente no topo; após 24 px de rolagem ganha fundo sólido, borda inferior de 1 px e a altura reduz de 76 para 62 px (200 ms).`,
+    `- **Revelação das seções:** cada bloco aparece uma única vez quando 20% dele entra na tela (IntersectionObserver): opacidade 0 para 1 e sobe 16 px em 500 ms. Em grades, 80 ms de intervalo entre os cards.`,
+    `- **Botões:** no hover sobem 2 px e ganham sombra suave (150 ms); a seta ou ícone desliza 4 px para a direita; ao clicar, escala 0,98 (80 ms).`,
+    `- **Cards de serviço:** no hover a borda muda para a cor primária, o ícone sobe 3 px e o link "Quero saber mais" ganha sublinhado que cresce da esquerda (200 ms).`,
+    `- **Fotos:** hover com zoom lento de 1 para 1,04 em 600 ms dentro da moldura (overflow escondido).`,
+    `- **Acordeão de dúvidas:** abre e fecha animando a altura em 250 ms; o ícone de seta gira 180 graus.`,
+    `- **WhatsApp flutuante:** entra 2 s depois do carregamento com escala 0,6 para 1 (300 ms); a cada 8 s solta um anel que expande e some (1,2 s), no máximo 3 vezes; some quando a Chamada final está visível, para não duplicar botões.`,
+    `- **Paralaxe:** só no desktop, a foto do hero desloca no máximo 24 px na rolagem.`,
+    `- **${p.motion}**`,
+    ia?.detalhe_motion ? `- **Detalhe sob medida para esta empresa:** ${ia.detalhe_motion}` : "",
+    `- **Acessibilidade:** com \`prefers-reduced-motion: reduce\`, desligar todas as animações e mostrar o conteúdo direto.`,
+    `- **Desempenho:** nenhuma animação pode atrasar o texto do hero; nada de bibliotecas pesadas (CSS e IntersectionObserver bastam; se precisar, Motion One ou GSAP só no que for necessário).`, "");
+
+  add(`## 8. Celular primeiro`,
+    `- Desenhe primeiro para 390 px de largura. Mais de 80% das visitas vêm do celular.`,
+    `- Área de toque mínima de 48 px. Botão principal do hero com largura total no celular.`,
+    `- Telefone clicável (\`tel:\`) e endereço que abre o mapa.`,
+    `- Nenhuma rolagem horizontal. Grades viram 1 coluna; carrosséis usam arrastar com encaixe.`,
+    `- Testar em 390, 768, 1024 e 1440 px.`, "");
+
+  add(`## 9. SEO local`,
+    `- **Título da página:** "${emp} | ${ramo.replace(/^./, (c) => c.toUpperCase())} em ${cidade}" (até 60 caracteres; encurtar se passar).`,
+    `- **Descrição:** "${(p.promessa.charAt(0).toUpperCase() + p.promessa.slice(1))}. ${emp}, ${regiao}. ${p.cta} pelo WhatsApp." (até 155 caracteres).`,
+    `- Um único H1 (o título do hero). Títulos de seção em H2, cards em H3.`,
+    `- Palavras para usar de forma natural: "${p.termo} em ${cidade}"${o.bairro ? `, "${p.termo} ${o.bairro}"` : ""}, "${p.termo} perto de mim"${l.categoria && semAcento(l.categoria) !== semAcento(p.termo) ? `, "${l.categoria.toLowerCase()} em ${cidade}"` : ""}.`,
+    `- Open Graph e Twitter Card com a foto do hero (1200 x 630), título e descrição.`,
+    `- Favicon com a inicial "${emp.charAt(0).toUpperCase()}" na cor primária.`,
+    `- Dados estruturados em JSON-LD no \`<head>\` (não incluir nota de avaliações do Google no JSON-LD, pois o Google não aceita avaliações de terceiros marcadas pelo próprio site):`,
+    "```json", JSON.stringify(jsonld, null, 2), "```", "");
+
+  add(`## 10. Técnico e qualidade`,
+    `- Uma página só, estática, leve. HTML semântico (\`header\`, \`main\`, \`section\`, \`footer\`), CSS moderno (ou Tailwind) e o mínimo de JavaScript. Se a sua ferramenta gera React/Next, tudo bem, mantendo o resultado estático.`,
+    `- Metas do Lighthouse no celular: Desempenho 90+, Acessibilidade 95+, SEO 100.`,
+    `- Imagens com \`loading="lazy"\` (menos a do hero, que usa \`fetchpriority="high"\`), largura e altura declaradas e \`srcset\`.`,
+    `- Fontes com \`font-display: swap\` e no máximo 2 famílias e 4 pesos.`,
+    `- Contraste AA em todos os textos, foco visível no teclado, texto alternativo em todas as imagens, \`lang="pt-BR"\`.`,
+    `- Links externos com \`rel="noopener"\`. Nenhum dado pessoal coletado; por isso não precisa de banner de cookies (só a política de privacidade simples).`,
+    `- Marcar cliques nos botões de WhatsApp com \`data-evento="whatsapp_[secao]"\`, para medir depois.`, "");
+
+  add(`## 11. O que NÃO fazer`,
+    `- Não inventar depoimentos, números, prêmios, preços ou nomes.`,
+    `- Não usar carrossel automático no hero, pop-ups, vídeo com som, contador regressivo falso nem chat robô.`,
+    `- Não usar mais de 2 fontes nem mais cores do que as definidas.`,
+    `- Não usar fotos genéricas de banco de imagens com modelos estrangeiros, apertos de mão ou headsets.`,
+    `- Não criar páginas extras, blog ou área de login.`,
+    `- Não esconder o WhatsApp: ele precisa estar visível em toda dobra.`, "");
+
+  add(`## 12. Entrega`,
+    `1. O site completo e funcionando, com todos os textos finais.`,
+    `2. No fim, uma lista "Pendências com o cliente" com todo marcador \`${CONF}\` usado e o que falta: horários de funcionamento, serviços reais, fotos reais, texto do Sobre, 3 avaliações do Google${p.regras ? ", registros profissionais" : ""}.`,
+    `3. As 2 opções de título que não foram usadas, para teste futuro.`);
+  return L.filter((x) => x !== "").join("\n").replace(/\n(## )/g, "\n\n$1").replace(/\n(\*\*Foto |\*\*3\.|### )/g, "\n\n$1").replace(/^(# .+)\n/, "$1\n\n");
+}
+
+let pAtual = null;
+function abrirPrompt(id) {
+  const l = leads[id]; if (!l) return;
+  pAtual = id;
+  const texto = promptSite(l), p = perfil(l);
+  $("#pNome").textContent = "Prompt do site · " + nomeCurto(l);
+  $("#pMeta").textContent = `Perfil: ${p.termo} · ${texto.split(/\s+/).length.toLocaleString("pt-BR")} palavras${l.siteIA ? " · com conteúdo sob medida da IA" : ""}`;
+  $("#pTxt").value = texto; $("#pTxt").scrollTop = 0;
+  $("#pIA").textContent = l.siteIA ? "✨ Refazer conteúdo com IA" : "✨ Aprofundar com IA";
+  $("#pStatus").textContent = l.siteIA ? "" : "Dica: \"Aprofundar com IA\" escreve títulos, serviços, dúvidas e o texto Sobre específicos desta empresa.";
+  $("#pStatus").classList.remove("err");
+  if (!$("#pDlg").open) $("#pDlg").showModal();
+}
+$("#pFechar").addEventListener("click", () => $("#pDlg").close());
+$("#pCopiar").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("#pTxt").value); toast("Prompt copiado. Cole na IA que cria o site."); }
+  catch { $("#pTxt").select(); toast("Texto selecionado: copie manualmente"); }
+});
+$("#pBaixar").addEventListener("click", async () => {
+  const l = leads[pAtual]; if (!l) return;
+  const dl = window.claude?.use ? await claude.use("downloads") : null;
+  if (!dl) { toast("Download indisponível aqui. Use Copiar."); return; }
+  try { await dl.save({ filename: `prompt-site-${semAcento(nomeCurto(l)).replace(/[^a-z0-9]+/g, "-").slice(0, 40)}.md`, data: $("#pTxt").value }); } catch {}
+});
+$("#mPrompt").addEventListener("click", () => { if (atual) abrirPrompt(atual.id); });
+$("#pIA").addEventListener("click", async () => {
+  const l = leads[pAtual]; if (!l) return;
+  const st = $("#pStatus"); st.classList.remove("err");
+  const sample = await getSample();
+  if (!sample) { st.textContent = "A IA só funciona com esta página aberta no Claude. O prompt acima já está completo sem ela."; st.classList.add("err"); return; }
+  const btn = $("#pIA"); btn.disabled = true; st.textContent = "A IA está estudando a empresa e escrevendo o conteúdo sob medida. Leva cerca de um minuto…";
+  const p = perfil(l), o = ondeFica(l);
+  const dados = { nome: l.nome, ramo_google: l.categoria || null, perfil_do_ramo: p.termo, bairro: o.bairro || null, cidade: o.cidade || null, nota_google: l.nota, avaliacoes_google: l.avaliacoes,
+    instagram: l.instagram || null, situacao_site: l.siteTipo || "sem site", anotacoes_do_vendedor: l.notas || null, publico_do_ramo: p.publico, promessa_do_ramo: p.promessa };
+  const s = (v, n) => String(v ?? "").trim().slice(0, n);
+  try {
+    const r = await sample.json(
+      `Você é estrategista de marca e redator de sites para pequenos negócios brasileiros. Com os dados abaixo, escreva o conteúdo sob medida para o site de uma página dessa empresa. Use o NOME da empresa como pista do que ela realmente faz e de como se posiciona.\n` +
+      `Responda só com um objeto JSON neste formato:\n{"posicionamento": "2 frases", "headlines": ["3 títulos de até 9 palavras, bem diferentes entre si"], "subheadline": "até 25 palavras", ` +
+      `"servicos": [6 objetos {"nome": "", "descricao": "até 16 palavras, focada no benefício"}], "diferenciais": [4 objetos {"titulo": "", "texto": "até 16 palavras"}], ` +
+      `"faq": [5 objetos {"pergunta": "", "resposta": "até 35 palavras"}], "sobre": "até 70 palavras, primeira pessoa do plural", ` +
+      `"fotos": ["3 descrições de fotos específicas para ESTA empresa, com enquadramento e luz"], "detalhe_motion": "uma micro-interação de assinatura, discreta, que combine com a marca, com duração em ms"}\n` +
+      `Regras: português do Brasil. Tom: ${p.tom}. Não invente fatos verificáveis (anos de experiência, prêmios, preços, nomes de pessoas, convênios, quantidade de clientes): quando precisar de um dado que não tem, escreva [CONFIRMAR]. ` +
+      `Os serviços devem ser os mais prováveis para o ramo e o nome da empresa. Evite clichês como "excelência" e "soluções". ${p.regras || ""}\n\nDADOS:\n${JSON.stringify(dados)}`,
+      { modelTier: "default", cache: false });
+    if (!r || typeof r !== "object" || Array.isArray(r)) throw { code: "invalid_json" };
+    const arr = (v, n, f) => (Array.isArray(v) ? v.slice(0, n).map(f).filter(Boolean) : []);
+    const siteIA = { posicionamento: s(r.posicionamento, 400), headlines: arr(r.headlines, 3, (h) => s(h, 120)), subheadline: s(r.subheadline, 260),
+      servicos: arr(r.servicos, 6, (x) => x?.nome ? { nome: s(x.nome, 60), descricao: s(x.descricao, 200) } : null),
+      diferenciais: arr(r.diferenciais, 4, (x) => x?.titulo ? { titulo: s(x.titulo, 60), texto: s(x.texto, 200) } : null),
+      faq: arr(r.faq, 5, (x) => x?.pergunta ? { pergunta: s(x.pergunta, 140), resposta: s(x.resposta, 400) } : null),
+      sobre: s(r.sobre, 700), fotos: arr(r.fotos, 3, (f) => s(f, 300)), detalhe_motion: s(r.detalhe_motion, 300) };
+    await salvarLead({ ...l, siteIA });
+    abrirPrompt(l.id); toast("Prompt aprofundado com conteúdo desta empresa");
+  } catch (e) { st.textContent = erroIA(e?.code); st.classList.add("err"); }
+  finally { btn.disabled = false; }
+});
+
 // ---------------- configurações ----------------
-function preencherCfg() { $("#cfgNome").value = cfg.nome || ""; $("#cfgOferta").value = cfg.oferta || ""; $("#cfgDias").value = cfg.dias || 3; }
+function preencherCfg() { $("#cfgNome").value = cfg.nome || ""; $("#cfgOferta").value = cfg.oferta || ""; $("#cfgDias").value = cfg.dias || 3; $("#cfgRefs").value = cfg.refs || ""; $("#cfgEstilo").value = cfg.estilo || ""; }
 $("#formCfg").addEventListener("submit", (e) => {
   e.preventDefault();
-  cfg = { nome: $("#cfgNome").value.trim(), oferta: $("#cfgOferta").value.trim(), dias: Math.max(1, Number($("#cfgDias").value) || 3) };
+  cfg = { ...cfg, nome: $("#cfgNome").value.trim(), oferta: $("#cfgOferta").value.trim(), dias: Math.max(1, Number($("#cfgDias").value) || 3),
+    refs: $("#cfgRefs").value.trim().slice(0, 1500), estilo: $("#cfgEstilo").value.trim().slice(0, 1000) };
   salvarCfg(); toast("Configurações salvas");
 });
 
