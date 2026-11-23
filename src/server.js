@@ -250,7 +250,12 @@ async function api(req, res, url) {
     if (acao === "padrao" && m === "GET") return json(res, 200, padraoSite(lead));
     if (acao === "previa" && m === "POST") {
       const b = await corpo(req);
-      return json(res, 200, { html: gerarSite(lead, limparRespostas(b.respostas, b.imagens)).html });
+      // na prévia ao vivo o site abre direto, sem a tela de carregamento
+      const html = gerarSite(lead, limparRespostas(b.respostas, b.imagens)).html
+        .replace('<body class="loading">', "<body>")
+        .replace("if (reduced) { countEl.textContent = 100; start(); }", "if (true) { countEl.textContent = 100; setTimeout(start, 0); }")
+        .replace("</style>", ".loader{display:none!important}</style>");
+      return json(res, 200, { html });
     }
     if (acao === "publicar" && m === "POST") {
       if (!db.config.hostingerToken) return json(res, 400, { erro: "Configure o token da Hostinger em Configurações." });
@@ -272,7 +277,7 @@ async function api(req, res, url) {
     const cidadeDe = (l) => (String(l.endereco).match(/,\s*([^,\-]+?)\s*-\s*[A-Z]{2}\b/) || [])[1] || "";
     return json(res, 200, {
       formato: "radar-leads", versao: 1, exportadoEm: new Date().toISOString(),
-      leads: lista.map((l) => ({ ...Object.fromEntries(campos.map((c) => [c, l[c] ?? null])), cidade: cidadeDe(l) })),
+      leads: lista.map((l) => ({ ...Object.fromEntries(campos.map((c) => [c, l[c] ?? null])), cidade: cidadeDe(l), siteDemo: l.siteDemo?.status === "pronto" ? l.siteDemo.url : null })),
     });
   }
 

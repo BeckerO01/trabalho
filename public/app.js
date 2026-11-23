@@ -379,60 +379,152 @@ function iniciarPolling() {
   if (pendentes().length) toast(`⏰ ${pendentes().length} lead(s) esperando retorno`);
 })();
 
+
 // ================= ASSISTENTE: CRIAR SITE DE DEMONSTRAÇÃO =================
-const AS = { lead: null, padrao: null, resp: null, imgs: {}, passo: 1, timer: null };
-const ETAPAS_PUB = [["gerando", "Montando o site com os dados da empresa"], ["conta", "Conectando à Hostinger"], ["subdominio", "Criando o endereço"], ["arquivos", "Enviando o site"], ["conferindo", "Conferindo se está no ar"]];
-const passosAs = (n) => `<div class="passos-as">${["Perguntas", "Confirmar", "Publicando", "Pronto"].map((t, i) => `<span class="${i + 1 === n ? "on" : ""}">${i + 1}. ${t}</span>`).join("")}</div>`;
-const fecharAs = () => { clearInterval(AS.timer); $("#siteDlg").close(); };
+// Uma pergunta por vez à esquerda, o site se atualizando ao vivo à direita,
+// confirmação, página branca de espera com o nome no centro e a mensagem pronta no fim.
+const AS = { lead: null, p: null, r: null, imgs: {}, i: 0, timer: null, previaT: null, inicioEspera: 0 };
+const CORES = ["#0f7a5c", "#1d4ed8", "#b91c1c", "#c2410c", "#7c3aed", "#0e7490", "#be185d", "#111827"];
+const ETAPAS_PUB = [
+  ["gerando", (r) => `Montando as seções com a cara da <b>${esc(r.nome)}</b>`],
+  ["conta", () => "Conectando à hospedagem"],
+  ["subdominio", (r, p) => `Reservando <b>${esc(r.sub)}.${esc(p.dominio)}</b>`],
+  ["arquivos", () => "Enviando o site para o ar"],
+  ["conferindo", () => "Conferindo se está tudo certinho"],
+];
+const corAtual = () => AS.r?.cor || AS.p?.corPadrao || "#0f7a5c";
+
+// ---- perguntas ----
+const PASSOS = [
+  { id: "inicio" },
+  { id: "sub", t: (r) => `Qual vai ser o <em>endereço</em> do site?`, a: "Curto e fácil de digitar. Só letras minúsculas e números.",
+    html: (r, p) => `<div class="st-sub"><input class="st-in" name="sub" value="${esc(r.sub)}" maxlength="40" autocomplete="off" spellcheck="false"><small>.${esc(p.dominio)}</small></div>`,
+    ok: (f) => /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/.test(f.sub) || "Use só letras minúsculas e números, sem espaços nem acentos." },
+  { id: "nome", t: () => `Como a empresa <em>aparece</em> no site?`, a: "O nome completo vai no título; a logo em texto aparece no topo quando não houver imagem.",
+    html: (r) => `<label class="st-campo"><span>Nome da empresa</span><input class="st-in" name="nome" value="${esc(r.nome)}" maxlength="80"></label>
+      <label class="st-campo"><span>Logo em texto</span><input class="st-in" name="marca" value="${esc(r.marca)}" maxlength="20"></label>`,
+    ok: (f) => f.nome.trim().length > 1 || "Escreva o nome da empresa." },
+  { id: "whatsapp", t: () => `Para qual <em>WhatsApp</em> vão os contatos do site?`, a: "Todos os botões do site abrem conversa com este número.",
+    html: (r) => `<input class="st-in" name="whatsapp" value="${esc(tel(r.whatsapp))}" inputmode="tel" placeholder="(41) 99999-9999">`,
+    ok: (f) => f.whatsapp.replace(/\D/g, "").length >= 10 || "Confira o número: precisa ter DDD." },
+  { id: "servicos", t: () => `Quais <em>serviços</em> a empresa oferece?`, a: "Um por linha, até 6. Vieram do ramo: tire o que a empresa não faz.",
+    html: (r) => `<textarea name="servicos" rows="6">${esc((r.servicos || []).join("\n"))}</textarea>`, area: true },
+  { id: "horario", t: () => `Qual o <em>horário</em> de funcionamento?`, a: "Opcional. Em branco, o site diz \"horários sob consulta\".",
+    html: (r) => `<textarea name="horario" rows="3" placeholder="Seg a sex · 9h às 19h&#10;Sáb · 9h às 13h">${esc(r.horario)}</textarea>`, area: true },
+  { id: "cor", t: () => `Qual <em>cor</em> combina com a marca?`, a: "A primeira é a sugerida para o ramo. Veja o site mudar ao lado.",
+    html: (r, p) => `<div class="st-cores">${[p.corPadrao, ...CORES.filter((c) => c !== p.corPadrao)].map((c, k) => `<button type="button" class="st-cor" data-cor="${c}" style="background:${c}" aria-label="Cor ${c}${k === 0 ? " (sugerida)" : ""}" aria-pressed="${corAtual().toLowerCase() === c.toLowerCase()}"></button>`).join("")}
+      <label class="st-cor-livre"><input type="color" name="corLivre" value="${esc(corAtual())}"> outra</label></div>` },
+  { id: "sobre", t: () => `Quer escrever o texto <em>"Quem somos"</em>?`, a: "Opcional. Em branco, o gerador escreve um texto a partir do ramo e do bairro.",
+    html: (r) => `<textarea name="sobre" rows="4" maxlength="600" placeholder="Ex.: Há 10 anos cuidando...">${esc(r.sobre)}</textarea>`, area: true },
+  { id: "fotos", t: () => `Tem <em>logo ou fotos</em> da empresa?`, a: "Opcional. Fotos reais (Instagram ou Google) deixam o site muito mais convincente.",
+    html: () => `<div class="st-fotos">${["logo", "foto1", "foto2", "foto3", "foto4"].map((c) => `<label class="st-foto ${AS.imgs[c] ? "tem" : ""}" ${AS.imgs[c] ? `style="background-image:url('${AS.imgs[c]}')"` : ""}>${c === "logo" ? "Logo" : "Foto " + c.slice(-1)}<input type="file" accept="image/*" data-img="${c}"></label>`).join("")}</div>` },
+  { id: "confirmar" },
+];
 
 async function abrirAssistente(id) {
   const l = S.leads.find((x) => x.id === id); if (!l) return;
   if (!S.config.temHostinger) { toast("Configure a Hostinger em Configurações antes de criar sites."); location.hash = "config"; return; }
-  AS.lead = l; AS.imgs = {}; AS.resp = null;
-  $("#siteCorpo").innerHTML = `<div class="espera"><div class="radar-g"></div><p>Carregando os dados de ${esc(l.nome)}…</p></div>`;
-  $("#siteDlg").showModal();
-  AS.padrao = await api("GET", `site/${id}/padrao`);
-  // se já está publicando, vai direto para a espera
+  AS.lead = l; AS.imgs = {}; AS.i = 0;
+  AS.p = await api("GET", `site/${id}/padrao`);
+  AS.r = { sub: AS.p.sub, nome: AS.p.nome, marca: AS.p.marca, whatsapp: AS.p.whatsapp, servicos: AS.p.servicos, horario: AS.p.horario, cor: AS.p.cor, sobre: AS.p.sobre };
   const st = await api("GET", `site/${id}`).catch(() => null);
-  if (st?.status === "publicando") return telaEspera();
-  telaPerguntas();
+  montarStudio();
+  if (st?.status === "publicando") return mostrarEspera();
+  telaPasso();
+  previa(true);
 }
 
-function telaPerguntas() {
-  const p = AS.padrao, r = AS.resp || p, l = AS.lead;
-  $("#siteCorpo").innerHTML = `<form class="as" id="asForm">
-    <div class="as-h"><div><h2>Criar site · ${esc(l.nome)}</h2><p>Tudo já vem preenchido com os dados do lead. Mude só o que quiser.</p></div><button type="button" class="btn ghost" data-as="fechar" aria-label="Fechar">✕</button></div>
-    ${passosAs(1)}
-    ${p.publicado ? `<div class="alerta-site tem">Este lead já tem site no ar: <a href="${esc(p.publicado)}" target="_blank" rel="noopener">${esc(p.publicado)}</a>. Publicar de novo substitui a versão atual.</div>` : ""}
-    <label class="pergunta"><b>Quer fazer alguma alteração antes de gerar?</b><small>Se não, é só seguir: o site sai no padrão do ramo (${esc(p.ramo)}).</small></label>
-    <label class="pergunta"><b>Endereço do site</b>
-      <div class="sub-row"><span>https://</span><input name="sub" value="${esc(r.sub || p.sub)}" maxlength="40" required autocomplete="off"><span>.${esc(p.dominio)}</span></div></label>
-    <div class="row2">
-      <label class="pergunta"><b>Nome da empresa no site</b><input name="nome" value="${esc(r.nome)}" maxlength="80" required></label>
-      <label class="pergunta"><b>Logo em texto (se não tiver imagem)</b><input name="marca" value="${esc(r.marca)}" maxlength="20"></label>
-    </div>
-    <label class="pergunta"><b>WhatsApp que recebe os contatos do site</b><input name="whatsapp" value="${esc(tel(r.whatsapp))}" inputmode="tel" required></label>
-    <label class="pergunta"><b>Serviços que aparecem no site</b><small>Um por linha, até 6. Vieram do ramo: confira se a empresa faz mesmo.</small><textarea name="servicos" rows="6">${esc((r.servicos || []).join("\n"))}</textarea></label>
-    <label class="pergunta"><b>Horário de funcionamento</b><small>Opcional. Ex.: "Seg a sex · 9h às 19h" (uma linha por dia ou faixa).</small><textarea name="horario" rows="2" placeholder="Em branco: &quot;horários sob consulta&quot;">${esc(r.horario)}</textarea></label>
-    <div class="pergunta"><b>Cor principal</b>
-      <div class="cor-row"><input type="color" name="cor" value="${esc(r.cor || p.corPadrao)}"><label class="chip" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" name="corPadrao" ${r.cor ? "" : "checked"} style="width:auto"> Usar a cor padrão do ramo</label></div></div>
-    <label class="pergunta"><b>Texto "Quem somos"</b><small>Opcional. Em branco, o gerador escreve um texto a partir do ramo e do bairro.</small><textarea name="sobre" rows="3" maxlength="600">${esc(r.sobre)}</textarea></label>
-    <div class="pergunta"><b>Logo e fotos</b><small>Opcional. A logo substitui o nome no topo; as fotos entram nos cartões "Por que a gente". Use fotos reais da empresa (Instagram ou Google).</small>
-      <div class="fotos-row">${["logo", "foto1", "foto2", "foto3", "foto4"].map((c) => `<label class="foto-slot ${AS.imgs[c] ? "tem" : ""}" ${AS.imgs[c] ? `style="background-image:url('${AS.imgs[c]}')"` : ""}>${c === "logo" ? "Logo" : "Foto " + c.slice(-1)}<input type="file" accept="image/*" data-img="${c}"></label>`).join("")}</div></div>
-    <div class="acoes"><button type="button" class="btn" data-as="previa">Ver prévia</button><span class="spacer"></span><button class="btn primary" type="submit">Continuar →</button></div>
-    <iframe class="previa-frame" id="asPrevia" hidden title="Prévia do site" sandbox="allow-scripts"></iframe>
-  </form>`;
+function montarStudio() {
+  const s = $("#studio");
+  s.innerHTML = `<div class="st-top"><div class="marca"><i></i>Criar site</div><div class="st-prog"><b id="stProg"></b></div><button class="st-x" data-st="fechar" aria-label="Fechar">✕</button></div>
+    <div class="st-corpo"><div class="st-q" id="stQ"></div>
+      <div class="st-tela"><div class="st-janela"><div class="st-barra"><i></i><i></i><i></i><span id="stUrl"></span></div>
+        <div class="st-frame-wrap" id="stWrap"><iframe id="stFrame" title="Prévia do site" sandbox="allow-scripts"></iframe><div class="st-selo">Prévia ao vivo</div></div></div></div></div>`;
+  s.hidden = false; requestAnimationFrame(() => s.classList.add("on"));
+  aplicarCor(); ajustarFrame();
+}
+const fecharStudio = () => { clearInterval(AS.timer); const s = $("#studio"); s.classList.remove("on"); setTimeout(() => { s.hidden = true; s.innerHTML = ""; }, 300); $("#stEspera").hidden = true; };
+function aplicarCor() { for (const el of [$("#studio"), $("#stEspera")]) el.style.setProperty("--st-cor", corAtual()); }
+function ajustarFrame() {
+  const w = $("#stWrap"), f = $("#stFrame"); if (!w || !f) return;
+  const k = w.clientWidth / 1440; f.style.transform = `scale(${k})`; f.style.height = Math.ceil(w.clientHeight / k) + "px";
+}
+addEventListener("resize", ajustarFrame);
+
+function telaPasso(direcao = 1) {
+  const q = $("#stQ"), passo = PASSOS[AS.i], total = PASSOS.length - 2;
+  $("#stProg").style.width = `${Math.round((AS.i / (PASSOS.length - 1)) * 100)}%`;
+  $("#stUrl").textContent = `https://${AS.r.sub}.${AS.p.dominio}`;
+  const old = q.querySelector(".st-card");
+  const desenhar = () => {
+    let html;
+    if (passo.id === "inicio") {
+      html = `<div class="st-card"><div class="st-num">${esc(AS.p.ramo)}</div>
+        <h2>Vamos criar o site da <em>${esc(AS.r.nome)}</em>.</h2>
+        <p class="ajuda">${AS.p.publicado ? `Já existe um site no ar (${esc(AS.p.publicado)}); publicar de novo substitui. ` : ""}Já montei tudo com os dados do lead: é o que você vê ao lado. Quer fazer alguma alteração antes de gerar?</p>
+        <div class="st-escolhas">
+          <button type="button" class="st-esc" data-st="direto"><kbd>1</kbd><span>Não, pode gerar assim<small>Vai direto para a confirmação.</small></span></button>
+          <button type="button" class="st-esc" data-st="ajustar"><kbd>2</kbd><span>Sim, quero ajustar<small>8 perguntas rápidas, todas já preenchidas.</small></span></button>
+        </div></div>`;
+    } else if (passo.id === "confirmar") {
+      const r = AS.r, url = `https://${r.sub}.${AS.p.dominio}`;
+      html = `<form class="st-card" id="stForm"><div class="st-num">TUDO PRONTO</div><h2>Publicar o site <em>agora</em>?</h2>
+        <p class="ajuda">Confira o resumo. O site fica fora do Google (é uma demonstração).</p>
+        <dl class="st-resumo">
+          <div><dt>Endereço</dt><dd><b>${esc(url)}</b></dd></div>
+          <div><dt>Empresa</dt><dd>${esc(r.nome)}</dd></div>
+          <div><dt>WhatsApp</dt><dd>${esc(tel(r.whatsapp))}</dd></div>
+          <div><dt>Serviços</dt><dd>${esc((r.servicos || []).join(" · ") || "padrão do ramo")}</dd></div>
+          <div><dt>Horário</dt><dd>${esc((r.horario || "").replace(/\n/g, " · ") || "sob consulta")}</dd></div>
+          <div><dt>Cor</dt><dd><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${esc(corAtual())};vertical-align:-2px"></span> ${r.cor ? esc(r.cor) : "sugerida do ramo"}</dd></div>
+          <div><dt>Imagens</dt><dd>${Object.keys(AS.imgs).length ? Object.keys(AS.imgs).length + " enviada(s)" : "nenhuma: visual da marca"}</dd></div>
+        </dl>
+        ${AS.p.publicado && AS.p.publicado.includes("//" + r.sub + ".") ? '<p class="st-aviso">A versão atual deste endereço será substituída.</p>' : ""}
+        <div class="st-acoes"><button class="st-ok" type="submit"><span>Sim, publicar o site</span><i>→</i></button><button type="button" class="st-volta" data-st="voltar">← Alterar</button></div></form>`;
+    } else {
+      html = `<form class="st-card" id="stForm"><div class="st-num">${String(AS.i).padStart(2, "0")} / ${String(total).padStart(2, "0")}</div>
+        <h2>${passo.t(AS.r, AS.p)}</h2><p class="ajuda">${passo.a}</p>${passo.html(AS.r, AS.p)}
+        <div class="st-acoes"><button class="st-ok" type="submit"><span>${AS.i === total ? "Revisar" : "OK"}</span><i>→</i></button>
+          <button type="button" class="st-volta" data-st="voltar">← Voltar</button><span class="st-dica">${passo.area ? "Ctrl + Enter" : "Enter ↵"}</span></div></form>`;
+    }
+    q.innerHTML = html;
+    const foco = q.querySelector("input:not([type=file]):not([type=color]), textarea");
+    if (foco) { foco.focus(); if (foco.setSelectionRange && foco.type !== "tel") foco.setSelectionRange(foco.value.length, foco.value.length); }
+  };
+  if (old) { old.classList.add("sai"); setTimeout(desenhar, 260); } else desenhar();
 }
 
-function lerRespostas() {
-  const f = new FormData($("#asForm"));
-  return { sub: String(f.get("sub") || "").trim().toLowerCase(), nome: f.get("nome"), marca: f.get("marca"), whatsapp: String(f.get("whatsapp") || "").replace(/\D/g, ""),
-    servicos: String(f.get("servicos") || "").split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 6), horario: f.get("horario"),
-    cor: f.get("corPadrao") ? "" : f.get("cor"), sobre: f.get("sobre") };
+function lerPasso() {
+  const f = $("#stForm"); if (!f) return {};
+  const d = Object.fromEntries(new FormData(f));
+  const r = AS.r;
+  if ("sub" in d) r.sub = String(d.sub).trim().toLowerCase();
+  if ("nome" in d) r.nome = d.nome; if ("marca" in d) r.marca = d.marca;
+  if ("whatsapp" in d) r.whatsapp = String(d.whatsapp).replace(/\D/g, "");
+  if ("servicos" in d) r.servicos = String(d.servicos).split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 6);
+  if ("horario" in d) r.horario = d.horario; if ("sobre" in d) r.sobre = d.sobre;
+  return { ...d, sub: r.sub, nome: r.nome || "", whatsapp: r.whatsapp || "" };
 }
+const respostas = () => ({ ...AS.r });
 const imagensEnvio = () => Object.entries(AS.imgs).map(([campo, dataUrl]) => ({ campo, dataUrl }));
 
-// reduz a imagem no navegador (até 1600 px, JPEG) para o site ficar leve
+async function previa(ja) {
+  clearTimeout(AS.previaT);
+  AS.previaT = setTimeout(async () => {
+    const f = $("#stFrame"); if (!f) return;
+    f.classList.add("carregando");
+    try { const { html } = await api("POST", `site/${AS.lead.id}/previa`, { respostas: respostas(), imagens: imagensEnvio() }); f.srcdoc = html; f.onload = () => { f.classList.remove("carregando"); ajustarFrame(); }; }
+    catch { f.classList.remove("carregando"); }
+  }, ja ? 0 : 700);
+}
+
+function avancar() {
+  const passo = PASSOS[AS.i];
+  if (passo.ok) { const v = passo.ok(lerPasso()); if (v !== true) { toast(v); return; } } else lerPasso();
+  AS.i = Math.min(AS.i + 1, PASSOS.length - 1); telaPasso(); previa();
+}
+
+// reduz a imagem no navegador (até 1600 px) para o site ficar leve
 function reduzirImagem(arquivo, max = 1600) {
   return new Promise((ok, erro) => {
     const img = new Image(), url = URL.createObjectURL(arquivo);
@@ -447,97 +539,113 @@ function reduzirImagem(arquivo, max = 1600) {
   });
 }
 
-function telaConfirmar() {
-  const r = AS.resp, p = AS.padrao, url = `https://${r.sub}.${p.dominio}`;
-  $("#siteCorpo").innerHTML = `<div class="as">
-    <div class="as-h"><div><h2>Confirmar publicação</h2><p>Confira antes de colocar no ar.</p></div><button type="button" class="btn ghost" data-as="fechar" aria-label="Fechar">✕</button></div>
-    ${passosAs(2)}
-    <div class="resumo">
-      <div>Endereço: <a>${esc(url)}</a></div>
-      <div>Empresa: <b>${esc(r.nome)}</b> · WhatsApp ${esc(tel(r.whatsapp))}</div>
-      <div>Serviços: ${esc(r.servicos.join(", ") || "padrão do ramo")}</div>
-      <div>Horário: ${esc(r.horario || "sob consulta")} · Cor: ${r.cor ? `<span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${esc(r.cor)};vertical-align:-1px"></span> ${esc(r.cor)}` : "padrão do ramo"}</div>
-      <div>Logo e fotos: ${Object.keys(AS.imgs).length ? Object.keys(AS.imgs).length + " imagem(ns)" : "nenhuma (visual da marca)"}</div>
+// ---- espera e resultado ----
+function mostrarEspera() {
+  const e = $("#stEspera"), nome = (AS.r.nome || AS.lead.nome).trim();
+  aplicarCor();
+  e.innerHTML = `<div class="halo" aria-hidden="true"></div><div class="meio" id="stMeio">
+    <div class="eyebrow"><i></i>Criando o site</div>
+    <h1 class="st-nome" aria-label="${esc(nome)}" style="font-size:${nome.length > 34 ? "clamp(30px,4.6vw,64px)" : nome.length > 20 ? "clamp(36px,6vw,84px)" : ""}">${(() => { let k = 0; return nome.split(/\s+/).map((w) => `<span style="white-space:nowrap;display:inline-block">${[...w].map((c) => `<span class="l" style="animation-delay:${(k++ * 0.035).toFixed(3)}s">${esc(c)}</span>`).join("")}</span>`).join(" "); })()}</h1>
+    <p class="st-frase" id="stFrase"><span>Seu site está ficando pronto…</span></p>
+    <div class="st-mini" aria-hidden="true">
+      <div class="topo"><div class="bl" style="width:70px;height:10px;animation-delay:.2s"></div><div class="bl cor" style="width:54px;height:16px;border-radius:99px;animation-delay:.4s"></div></div>
+      <div class="hero"><div style="display:grid;gap:8px"><div class="bl" style="height:18px;animation-delay:.6s"></div><div class="bl cor" style="height:18px;width:70%;animation-delay:.8s"></div><div class="bl" style="height:18px;width:85%;animation-delay:1s"></div><div class="bl" style="height:8px;width:60%;margin-top:6px;animation-delay:1.2s"></div></div><div class="orbe"></div></div>
+      <div class="cards"><div class="bl" style="height:34px;animation-delay:1.4s"></div><div class="bl" style="height:34px;animation-delay:1.55s"></div><div class="bl" style="height:34px;animation-delay:1.7s"></div></div>
     </div>
-    ${p.publicado && p.publicado.includes(r.sub + ".") ? `<p class="muted">O site atual deste endereço será substituído.</p>` : ""}
-    <p><b>Quer mesmo publicar o site agora?</b> Ele fica fora do Google (marcado como prévia).</p>
-    <div class="acoes"><button class="btn" data-as="voltar">← Voltar e alterar</button><span class="spacer"></span><button class="btn primary" data-as="publicar">Sim, publicar site</button></div>
+    <div class="st-barra-prog"><b id="stBarra"></b></div>
   </div>`;
-}
-
-function telaEspera() {
-  const nome = AS.lead.nome;
-  $("#siteCorpo").innerHTML = `<div class="as">${passosAs(3)}<div class="espera">
-    <div class="radar-g" aria-hidden="true"></div>
-    <div><h2>Criando o site de ${esc(nome)}</h2><p class="muted">Leva menos de um minuto. Pode deixar esta janela aberta.</p></div>
-    <ol class="etapas-lista" id="asEtapas">${ETAPAS_PUB.map(([k, t]) => `<li data-e="${k}">${t}</li>`).join("")}</ol>
-  </div></div>`;
+  e.hidden = false; AS.inicioEspera = Date.now();
+  let ultima = "";
   clearInterval(AS.timer);
   const tick = async () => {
     const st = await api("GET", `site/${AS.lead.id}`).catch(() => null);
     if (!st) return;
-    const i = ETAPAS_PUB.findIndex(([k]) => k === st.etapa);
-    document.querySelectorAll("#asEtapas li").forEach((li, j) => { li.className = st.status === "pronto" || j < i ? "feito" : j === i ? "atual" : ""; });
-    if (st.status === "pronto") { clearInterval(AS.timer); setTimeout(() => telaPronto(st), 600); atualizar().then(render); }
-    if (st.status === "erro") { clearInterval(AS.timer); telaErro(st.erro); }
+    const i = Math.max(0, ETAPAS_PUB.findIndex(([k]) => k === st.etapa));
+    if (st.etapa !== ultima && ETAPAS_PUB[i]) { ultima = st.etapa; $("#stFrase").innerHTML = `<span>${ETAPAS_PUB[i][1](AS.r, AS.p)}…</span>`; }
+    $("#stBarra").style.width = st.status === "pronto" ? "100%" : `${Math.round(((i + 1) / (ETAPAS_PUB.length + 1)) * 100)}%`;
+    if (st.status === "pronto") {
+      clearInterval(AS.timer);
+      // deixa a animação respirar pelo menos 5 s, mesmo quando a publicação é instantânea
+      setTimeout(() => mostrarPronto(st), Math.max(800, 5000 - (Date.now() - AS.inicioEspera)));
+      atualizar().then(render);
+    }
+    if (st.status === "erro") { clearInterval(AS.timer); mostrarErro(st.erro); }
   };
-  tick(); AS.timer = setInterval(tick, 1500);
+  tick(); AS.timer = setInterval(tick, 1200);
 }
 
-function telaPronto(st) {
-  const l = AS.lead, nome = (AS.resp?.nome || l.nome).trim();
+function mostrarPronto(st) {
+  const l = AS.lead, nome = (AS.r.nome || l.nome).trim();
   const msg = `Olá, tudo bem? Criei um site de demonstração para a ${nome}: ${st.url}\n\nDá uma olhada e me diz o que achou!`;
-  const n = l.whatsapp || l.telefone;
-  $("#siteCorpo").innerHTML = `<div class="as">
-    <div class="as-h"><div><h2>Site no ar! 🎉</h2><p>Pronto para mandar para ${esc(l.nome)}.</p></div><button type="button" class="btn ghost" data-as="fechar" aria-label="Fechar">✕</button></div>
-    ${passosAs(4)}
-    <a class="pronto-link" href="${esc(st.url)}" target="_blank" rel="noopener">${esc(st.url)} ↗</a>
-    <label class="pergunta"><b>Mensagem pronta</b><textarea id="asMsg" rows="5">${esc(msg)}</textarea></label>
-    <div class="acoes">
-      <a class="btn wa" id="asWa" target="_blank" rel="noopener" ${n ? "" : 'aria-disabled="true"'}>Enviar no WhatsApp ↗</a>
-      <button class="btn" data-as="copiar">Copiar mensagem</button>
-      <a class="btn" href="${esc(st.url)}" target="_blank" rel="noopener">Abrir site</a>
-      <span class="spacer"></span><button class="btn ghost" data-as="fechar">Fechar</button>
-    </div>
-  </div>`;
-  const link = () => { $("#asWa").href = n ? `https://wa.me/${n}?text=${encodeURIComponent($("#asMsg").value)}` : "#"; };
-  link(); $("#asMsg").addEventListener("input", link);
-  $("#asWa").addEventListener("click", () => setTimeout(() => salvarLead(l.id, { mensagem: $("#asMsg").value, ...(l.etapa === "novo" ? { etapa: "contatado" } : {}) }), 300));
+  const n = AS.r.whatsapp || l.whatsapp || l.telefone;
+  $("#stMeio").outerHTML = `<div class="st-pronto">
+    <div class="st-check"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <h1 class="st-nome" style="font-size:clamp(34px,5vw,64px)">Site no ar!</h1>
+    <a class="st-link" href="${esc(st.url)}" target="_blank" rel="noopener">${esc(st.url.replace(/\/$/, ""))} ↗</a>
+    <textarea id="stMsg" rows="4" aria-label="Mensagem pronta">${esc(msg)}</textarea>
+    <div class="st-acoes">
+      <a class="st-wa" id="stWa" target="_blank" rel="noopener">Enviar no WhatsApp ↗</a>
+      <button class="st-sec" data-st="copiar">Copiar mensagem</button>
+      <a class="st-sec" href="${esc(st.url)}" target="_blank" rel="noopener">Abrir site</a>
+      <button class="st-sec" data-st="fechar">Fechar</button>
+    </div></div>`;
+  const link = () => { $("#stWa").href = n ? `https://wa.me/${numeroWa(n)}?text=${encodeURIComponent($("#stMsg").value)}` : "#"; };
+  link(); $("#stMsg").addEventListener("input", link);
+  $("#stWa").addEventListener("click", () => setTimeout(() => salvarLead(l.id, { mensagem: $("#stMsg").value, ...(l.etapa === "novo" ? { etapa: "contatado" } : {}) }), 300));
+  confete();
+}
+const numeroWa = (n) => { let d = String(n).replace(/\D/g, ""); if (!d.startsWith("55") && d.length <= 11) d = "55" + d; return d; };
+function confete() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const e = $("#stEspera"), cores = [corAtual(), "#101413", "#25D366", "#f5c542"];
+  for (let k = 0; k < 60; k++) {
+    const c = document.createElement("i"); c.className = "confete";
+    c.style.cssText = `left:${Math.random() * 100}%;background:${cores[k % cores.length]};animation-delay:${Math.random() * 0.6}s;animation-duration:${2 + Math.random() * 1.6}s`;
+    e.append(c); setTimeout(() => c.remove(), 4500);
+  }
+}
+function mostrarErro(erro) {
+  $("#stMeio").innerHTML = `<div class="eyebrow" style="color:#b91c1c"><i></i>Não deu certo</div>
+    <h1 class="st-nome" style="font-size:clamp(30px,4vw,52px)">O site não foi publicado</h1>
+    <p class="st-frase">${esc(erro || "Erro desconhecido.")}</p>
+    <div class="st-acoes"><button class="st-ok" data-st="publicar"><span>Tentar de novo</span><i>↻</i></button><button class="st-sec" data-st="revisar">Voltar às perguntas</button></div>`;
 }
 
-function telaErro(erro) {
-  $("#siteCorpo").innerHTML = `<div class="as"><div class="as-h"><div><h2>Não deu para publicar</h2><p>${esc(erro || "Erro desconhecido.")}</p></div><button type="button" class="btn ghost" data-as="fechar" aria-label="Fechar">✕</button></div>
-    <div class="acoes"><button class="btn" data-as="voltar">← Voltar</button><span class="spacer"></span><button class="btn primary" data-as="publicar">Tentar de novo</button></div></div>`;
+async function publicar() {
+  mostrarEspera();
+  try { await api("POST", `site/${AS.lead.id}/publicar`, { respostas: respostas(), imagens: imagensEnvio() }); }
+  catch (err) { clearInterval(AS.timer); mostrarErro(err.message); }
 }
 
-$("#siteDlg").addEventListener("change", async (e) => {
+// ---- eventos ----
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-criar-site]"); if (b) { e.stopPropagation(); abrirAssistente(b.dataset.criarSite); } }, true);
+for (const raiz of ["#studio", "#stEspera"]) $(raiz).addEventListener("click", async (e) => {
+  const cor = e.target.closest("[data-cor]");
+  if (cor) { AS.r.cor = cor.dataset.cor === AS.p.corPadrao ? "" : cor.dataset.cor; document.querySelectorAll(".st-cor").forEach((b) => b.setAttribute("aria-pressed", String(b === cor))); aplicarCor(); previa(); return; }
+  const a = e.target.closest("[data-st]")?.dataset.st; if (!a) return;
+  if (a === "fechar") fecharStudio();
+  if (a === "direto") { AS.i = PASSOS.length - 1; telaPasso(); }
+  if (a === "ajustar") { AS.i = 1; telaPasso(); }
+  if (a === "voltar") { lerPasso(); AS.i = AS.i === PASSOS.length - 1 ? 1 : Math.max(0, AS.i - 1); telaPasso(-1); previa(); }
+  if (a === "publicar") publicar();
+  if (a === "revisar") { $("#stEspera").hidden = true; AS.i = 1; telaPasso(); }
+  if (a === "copiar") { try { await navigator.clipboard.writeText($("#stMsg").value); toast("Mensagem copiada"); } catch { $("#stMsg").select(); } }
+});
+$("#studio").addEventListener("submit", (e) => { e.preventDefault(); if (PASSOS[AS.i].id === "confirmar") publicar(); else avancar(); });
+$("#studio").addEventListener("input", (e) => {
+  if (e.target.name === "corLivre") { AS.r.cor = e.target.value; document.querySelectorAll(".st-cor").forEach((b) => b.setAttribute("aria-pressed", "false")); aplicarCor(); }
+  else if (e.target.closest("#stForm")) lerPasso();
+  if (e.target.name === "sub") $("#stUrl").textContent = `https://${AS.r.sub}.${AS.p.dominio}`;
+  previa();
+});
+$("#studio").addEventListener("change", async (e) => {
   const c = e.target.dataset?.img; if (!c || !e.target.files[0]) return;
-  try { AS.imgs[c] = await reduzirImagem(e.target.files[0], c === "logo" ? 600 : 1600); const slot = e.target.closest(".foto-slot"); slot.classList.add("tem"); slot.style.backgroundImage = `url('${AS.imgs[c]}')`; }
+  try { AS.imgs[c] = await reduzirImagem(e.target.files[0], c === "logo" ? 600 : 1600); const slot = e.target.closest(".st-foto"); slot.classList.add("tem"); slot.style.backgroundImage = `url('${AS.imgs[c]}')`; previa(); }
   catch (err) { toast(err.message); }
 });
-$("#siteDlg").addEventListener("submit", (e) => {
-  e.preventDefault();
-  if (!e.target.reportValidity()) return;
-  AS.resp = lerRespostas();
-  if (AS.resp.whatsapp.length < 10) { toast("Confira o WhatsApp: precisa ter DDD."); return; }
-  if (!/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/.test(AS.resp.sub)) { toast("Endereço: use só letras minúsculas e números, sem espaços nem acentos."); return; }
-  telaConfirmar();
+document.addEventListener("keydown", (e) => {
+  if ($("#studio").hidden || !$("#stEspera").hidden) return;
+  if (PASSOS[AS.i]?.id === "inicio" && (e.key === "1" || e.key === "2")) { $(`[data-st="${e.key === "1" ? "direto" : "ajustar"}"]`).click(); return; }
+  if (e.key === "Enter" && e.target.tagName === "TEXTAREA" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("#stForm")?.requestSubmit(); }
+  if (e.key === "Escape") fecharStudio();
 });
-$("#siteDlg").addEventListener("click", async (e) => {
-  const a = e.target.closest("[data-as]")?.dataset.as; if (!a) return;
-  if (a === "fechar") fecharAs();
-  if (a === "voltar") telaPerguntas();
-  if (a === "copiar") { try { await navigator.clipboard.writeText($("#asMsg").value); toast("Mensagem copiada"); } catch { $("#asMsg").select(); } }
-  if (a === "previa") {
-    const fr = $("#asPrevia"); fr.hidden = false; fr.srcdoc = '<p style="font:14px system-ui;padding:20px">Gerando prévia…</p>';
-    const { html } = await api("POST", `site/${AS.lead.id}/previa`, { respostas: lerRespostas(), imagens: imagensEnvio() });
-    fr.srcdoc = html; fr.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-  if (a === "publicar") {
-    telaEspera();
-    try { await api("POST", `site/${AS.lead.id}/publicar`, { respostas: { ...AS.resp, whatsapp: AS.resp.whatsapp }, imagens: imagensEnvio() }); }
-    catch (err) { clearInterval(AS.timer); telaErro(err.message); }
-  }
-});
-$("#siteDlg").addEventListener("close", () => clearInterval(AS.timer));
-document.addEventListener("click", (e) => { const b = e.target.closest("[data-criar-site]"); if (b) { e.stopPropagation(); abrirAssistente(b.dataset.criarSite); } }, true);
