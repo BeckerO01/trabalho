@@ -268,7 +268,7 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
     <div class="toolbar">
       <input id="filtro" placeholder="Filtrar por nome, nicho ou cidade" aria-label="Filtrar leads">
       <button class="btn" id="btnCsv">Exportar CSV</button>
-      <button class="btn" id="btnStatus" title="Leva ao programa do PC quem você já contatou">Enviar status ao PC</button>
+      <button class="btn primary" id="btnStatus" title="Leva todos os leads, com a etapa de cada um, para o programa do PC">Exportar leads</button>
     </div>
     <div id="funilEmpty" class="empty" hidden>
       <h3>Seu funil está vazio</h3>
@@ -688,15 +688,15 @@ $("#btnCsv").addEventListener("click", async () => {
 });
 
 $("#btnStatus").addEventListener("click", async () => {
-  const lista = Object.values(leads).map((l) => ({ id: l.id, nome: l.nome, telefone: l.telefone || "", whatsapp: l.whatsapp || "", etapa: l.etapa,
-    tentativas: l.tentativas || 0, followup: l.followup || "", notas: l.notas || "", siteEnviado: Boolean(l.siteEnviado) }));
+  const campos = ["id", "nome", "categoria", "endereco", "telefone", "whatsapp", "email", "instagram", "facebook", "site", "siteTipo", "nota", "avaliacoes", "mapsUrl", "etapa", "followup", "notas"];
+  const lista = Object.values(leads).map((l) => ({ ...Object.fromEntries(campos.map((c) => [c, l[c] ?? ""])), tentativas: l.tentativas || 0, siteEnviado: Boolean(l.siteEnviado) }));
   const pacote = JSON.stringify({ formato: "radar-status", versao: 1, exportadoEm: new Date().toISOString(), leads: lista });
   const contatados = lista.filter((l) => l.etapa !== "novo").length;
   const dl = window.claude?.use ? await claude.use("downloads") : null;
   if (dl) {
-    try { await dl.save({ filename: `radar-status-${hoje()}.json`, data: pacote }); toast(`${lista.length} leads (${contatados} já contatados). No PC: Leads → Importar do Claude.`); return; } catch {}
+    try { await dl.save({ filename: `radar-status-${hoje()}.json`, data: pacote }); toast(`${lista.length} leads exportados (${contatados} já contatados). No PC: Leads → Importar.`); return; } catch {}
   }
-  try { await navigator.clipboard.writeText(pacote); toast("Status copiado. No PC: Leads → Importar do Claude → colar."); } catch { toast("Não foi possível exportar aqui."); }
+  try { await navigator.clipboard.writeText(pacote); toast("Leads copiados. No PC: Leads → Importar."); } catch { toast("Não foi possível exportar aqui."); }
 });
 
 // ---------------- follow-ups ----------------

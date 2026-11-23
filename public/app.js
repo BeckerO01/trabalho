@@ -194,6 +194,7 @@ const views = {
       <form class="card form" id="formCfg" style="max-width:640px">
         <label class="f">Seu nome (assina a mensagem)<input name="nome" value="${esc(c.nome)}" placeholder="Pedro"></label>
         <label class="f">O que você oferece<textarea name="oferta" rows="2" placeholder="Sites profissionais a partir de R$ 497, prontos em 7 dias.">${esc(c.oferta)}</textarea></label>
+        <label class="f">Preço ou faixa de preço (entra na resposta "quanto custa?")<input name="preco" value="${esc(c.preco || "")}" placeholder="a partir de R$ 497, em até 3x"></label>
         <label class="f">Dias até o follow-up depois do primeiro contato<input name="diasFollowup" type="number" min="1" max="60" value="${c.diasFollowup || 3}"></label>
         <label class="f">Chave da API Claude (opcional)<input name="anthropicKey" type="password" autocomplete="off" placeholder="${c.temChave ? "Chave salva. Cole outra para trocar." : "sk-ant-…"}"></label>
         <p class="muted" style="margin:-6px 0 0;font-size:12px">${c.temChave ? "Mensagens escritas pelo Claude. " : "Sem chave, o app usa um modelo de mensagem pronto. "}A chave fica só neste computador, em data/db.json.</p>
@@ -285,7 +286,7 @@ document.addEventListener("change", async (e) => {
     const dados = JSON.parse(await e.target.files[0].text());
     const r = await api("POST", "status", dados);
     await atualizar(); render();
-    toast(`${r.atualizados} leads atualizados · ${r.contatados} já contatados${r.naoEncontrados ? ` · ${r.naoEncontrados} não estão neste PC` : ""}.`);
+    toast(`${r.atualizados} atualizados${r.criados ? ` · ${r.criados} novos` : ""} · ${r.contatados} já contatados.`);
   } catch (err) { toast(err instanceof SyntaxError ? "Arquivo inválido." : err.message); }
   e.target.value = "";
 });
@@ -342,10 +343,12 @@ function abrirLead(id) {
       <dt>Endereço</dt><dd>${esc(l.endereco) || "–"}</dd>
       <dt>Google</dt><dd>${l.nota ? `★ ${String(l.nota).replace(".", ",")} (${(l.avaliacoes || 0).toLocaleString("pt-BR")} avaliações) · ` : ""}<a href="${esc(l.mapsUrl)}" target="_blank" rel="noopener">Ver no Maps ↗</a></dd>
     </dl>
-    <div class="row2"><label class="f">Etapa<select id="dEtapa">${ETAPAS.map(([v, n]) => `<option value="${v}" ${l.etapa === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
-      <label class="f">Próximo follow-up<input type="date" id="dFollow" value="${esc(l.followup)}"></label></div>
+    <div><p class="lbl">Em que pé está? Toque para mover</p><div class="etapas" id="dEtapas"></div></div>
+    <select id="dEtapa" hidden>${ETAPAS.map(([v, n]) => `<option value="${v}" ${l.etapa === v ? "selected" : ""}>${n}</option>`).join("")}</select>
+    <label class="f">Próximo follow-up<input type="date" id="dFollow" value="${esc(l.followup)}"></label>
     <label class="f">Anotações<textarea id="dNotas" rows="2">${esc(l.notas)}</textarea></label>
-    <label class="f">Mensagem de abordagem<textarea id="dMsg" rows="7" placeholder="Clique em Escrever mensagem">${esc(l.mensagem)}</textarea></label>
+    <div class="bloco"><p class="lbl" id="dCenLbl">Mensagens prontas</p><div class="cenarios" id="dCenarios"></div><p class="hint-s" id="dDica"></p></div>
+    <label class="f">Mensagem<textarea id="dMsg" rows="7">${esc(l.mensagem)}</textarea></label>
     <div class="acoes"><button class="btn" id="dGerar">✨ Escrever mensagem</button><button class="btn" id="dCopiar">Copiar</button>
       <a class="btn wa" id="dWhats" target="_blank" rel="noopener">Abrir no WhatsApp ↗</a></div>
     <div class="acoes"><button class="btn ghost" id="dDescartar">${l.descartado ? "Restaurar lead" : "Descartar lead"}</button><span class="spacer"></span><button class="btn primary" id="dSalvar">Salvar</button></div>`;
@@ -354,7 +357,26 @@ function abrirLead(id) {
   linkWa();
   $("#dMsg").addEventListener("input", linkWa);
   const coletar = () => ({ etapa: $("#dEtapa").value, followup: $("#dFollow").value, notas: $("#dNotas").value, mensagem: $("#dMsg").value });
-  $("#dEtapa").addEventListener("change", async () => { const n = await salvarLead(l.id, { etapa: $("#dEtapa").value }); if (n) $("#dFollow").value = n.followup || ""; });
+  // mensagens prontas da etapa atual
+  let MSG = null;
+  const desenharEtapa = () => {
+    const e = $("#dEtapa").value;
+    $("#dEtapas").innerHTML = ETAPAS.map(([v, n]) => `<button type="button" class="etapa-b" data-et="${v}" aria-pressed="${v === e}">${n}</button>`).join("");
+    if (!MSG) return;
+    $("#dCenLbl").textContent = "Mensagens prontas · " + nomeEtapa(e);
+    $("#dCenarios").innerHTML = (MSG.mensagens[e] || []).map((c, i) => `<button type="button" class="cen" data-cen="${i}">${esc(c.nome)}</button>`).join("");
+    $("#dDica").textContent = MSG.dicas[e] || "";
+  };
+  const escolher = (i) => { const c = MSG?.mensagens[$("#dEtapa").value]?.[i]; if (c) { $("#dMsg").value = c.texto; linkWa(); document.querySelectorAll("#dCenarios .cen").forEach((b, k) => b.setAttribute("aria-pressed", String(k === i))); } };
+  desenharEtapa();
+  api("GET", `leads/${l.id}/mensagens`).then((m) => { MSG = m; desenharEtapa(); if (!$("#dMsg").value.trim()) escolher(0); }).catch(() => {});
+  $("#dEtapas").addEventListener("click", async (ev) => {
+    const b = ev.target.closest("[data-et]"); if (!b || b.dataset.et === $("#dEtapa").value) return;
+    $("#dEtapa").value = b.dataset.et;
+    const n = await salvarLead(l.id, { etapa: b.dataset.et }); if (n) { Object.assign(l, n); $("#dFollow").value = n.followup || ""; }
+    desenharEtapa(); escolher(0); toast("Movido para " + nomeEtapa(b.dataset.et));
+  });
+  $("#dCenarios").addEventListener("click", (ev) => { const b = ev.target.closest("[data-cen]"); if (b) escolher(Number(b.dataset.cen)); });
   $("#dFechar").addEventListener("click", () => { d.hidden = true; });
   $("#dSalvar").addEventListener("click", async () => { const { etapa, ...resto } = coletar(); await salvarLead(l.id, { ...resto, etapa }); d.hidden = true; toast("Lead salvo"); });
   $("#dDescartar").addEventListener("click", async () => { await salvarLead(l.id, { descartado: !l.descartado }); d.hidden = true; toast(l.descartado ? "Lead restaurado" : "Lead descartado"); });
