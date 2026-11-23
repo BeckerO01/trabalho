@@ -2,10 +2,10 @@
 title Radar de Leads
 cd /d "%~dp0"
 
-where node >nul 2>nul
+node -e "const [a,b]=process.versions.node.split('.').map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)" >nul 2>nul
 if errorlevel 1 (
   echo.
-  echo  O Node.js nao esta instalado.
+  echo  O Node.js nao esta instalado ou esta desatualizado (precisa ser 22.13 ou mais novo).
   echo  Baixe em https://nodejs.org ^(botao LTS^), instale e abra este arquivo de novo.
   echo.
   start https://nodejs.org

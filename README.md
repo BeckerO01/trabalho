@@ -26,7 +26,7 @@ Quente ≥ 60, morno ≥ 40.
 Cole sua chave da API Claude em **Configurações** (ou defina `ANTHROPIC_API_KEY`). Sem chave, o app usa um modelo de mensagem pronto.
 
 ### Dados
-Tudo fica em `RadarDeLeads/db.json`, dentro da sua pasta de usuário (ex.: `C:\Users\Pedro\RadarDeLeads`), só no seu computador. Baixar uma versão nova do programa não apaga nada. O servidor só aceita conexões do próprio computador.
+Tudo fica num banco de dados SQLite (`radar.db`) na pasta `RadarDeLeads`, dentro da sua pasta de usuário (ex.: `C:\Users\Pedro\RadarDeLeads`). Backup automático todo dia em `RadarDeLeads/backups` (guarda 14 dias) e botão "Baixar backup" em Configurações. Atualizar o programa não apaga nada. O servidor só aceita conexões do próprio computador.
 
 ### Observações
 - A leitura do Google Maps depende da página do Google: se ele mudar o layout, a busca pode parar de achar campos.

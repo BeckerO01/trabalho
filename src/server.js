@@ -3,7 +3,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import db, { salvar, salvarAgora } from "./db.js";
+import db, { salvar, salvarAgora, copiaDoBanco, DIR as PASTA_DADOS } from "./db.js";
 import { rodarBusca, TAMANHOS } from "./scraper.js";
 import { pontuar, temperatura } from "./scoring.js";
 import { mensagemIA, mensagemPronta } from "./ia.js";
@@ -97,7 +97,7 @@ const resumoBusca = (b) => {
     semSite: ls.filter((l) => l.siteTipo !== "proprio").length,
   };
 };
-const configPublica = () => ({ ...db.config, anthropicKey: undefined, hostingerToken: undefined, temHostinger: Boolean(db.config.hostingerToken), dominioSite: db.config.dominioSite || "pedroprendim.com", login: auth.ATIVO, temChave: Boolean(process.env.ANTHROPIC_API_KEY || db.config.anthropicKey) });
+const configPublica = () => ({ ...db.config, pastaDados: PASTA_DADOS, anthropicKey: undefined, hostingerToken: undefined, temHostinger: Boolean(db.config.hostingerToken), dominioSite: db.config.dominioSite || "pedroprendim.com", login: auth.ATIVO, temChave: Boolean(process.env.ANTHROPIC_API_KEY || db.config.anthropicKey) });
 // ---------- site de demonstração ----------
 // endereço curto: só as palavras que identificam a empresa (sem "clínica", "estética", "de"...)
 function subPadrao(lead) {
@@ -240,6 +240,12 @@ async function api(req, res, url) {
       if ("dominioSite" in b) db.config.dominioSite = String(b.dominioSite).trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "") || "pedroprendim.com";
       salvarAgora(); return json(res, 200, configPublica());
     }
+  }
+
+  if (recurso === "backup" && m === "GET") {
+    salvarAgora();
+    res.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Disposition": `attachment; filename="radar-backup-${hoje()}.db"` });
+    return res.end(copiaDoBanco());
   }
 
   if (recurso === "hostinger" && id === "testar" && m === "POST") {

@@ -1,20 +1,12 @@
 /* Painel de prospecção: barra lateral + conteúdo; tons de grafite esverdeado com acento verde-radar */
 :root {
-  --bg: #f2f4f3; --surface: #ffffff; --sunk: #e8ecea; --ink: #15201c; --muted: #5f6d68; --line: #d8e0dc;
+  --bg: #ffffff; --surface: #ffffff; --sunk: #f4f6f5; --ink: #15201c; --muted: #5f6d68; --line: #d8e0dc;
   --accent: #0f7a5c; --accent-ink: #fff; --accent-soft: #dcefe8;
   --hot: #c2410c; --warm: #b7791f; --cold: #64748b; --ok: #15803d; --danger: #b91c1c; --ig: #c13584;
   --f-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
   --f-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
   color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d1412; --surface: #141d1a; --sunk: #1b2622; --ink: #e5ede9; --muted: #93a39d; --line: #26332e;
-    --accent: #34c49a; --accent-ink: #052119; --accent-soft: #15372c;
-    --hot: #f97316; --warm: #eab308; --cold: #94a3b8; --ok: #22c55e; --danger: #f87171; --ig: #e1559f;
-    color-scheme: dark;
-  }
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
