@@ -292,6 +292,7 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
       <label class="f">Preço (usado quando o cliente pergunta "quanto custa?") <input id="cfgPreco" placeholder="R$ 497, em até 12x"></label>
       <label class="f">Prazo de entrega <input id="cfgPrazo" placeholder="3 dias"></label>
       <label class="f">Link do seu portfólio (vai nas mensagens) <input id="cfgPortfolio" placeholder="https://pedroprendim.com"></label>
+      <label class="f">Seu Instagram (vai nas mensagens) <input id="cfgInsta" placeholder="@pedroprendim"></label>
       <label class="f">Dias até o follow-up depois do primeiro contato <input id="cfgDias" type="number" min="1" max="30" value="3"></label>
       <h2 style="font-size:17px">Seus sites</h2>
       <label class="f">Sites de referência (um link por linha, opcional) <textarea id="cfgRefs" rows="3" placeholder="https://exemplo.com.br"></textarea></label>
@@ -442,7 +443,7 @@ const linkSeguro = (u) => /^https:\/\//i.test(String(u || "")) ? String(u) : "";
 
 // ---------------- estado + persistência ----------------
 let leads = {};            // id -> lead
-const PADRAO = { nome: "Pedro Prendim", oferta: "Faço sites profissionais por R$ 497, em até 12x, e entrego em 3 dias.", preco: "R$ 497, em até 12x", prazo: "3 dias", portfolio: "https://pedroprendim.com" };
+const PADRAO = { nome: "Pedro Prendim", oferta: "Faço sites profissionais por R$ 497, em até 12x, e entrego em 3 dias.", preco: "R$ 497, em até 12x", prazo: "3 dias", portfolio: "https://pedroprendim.com", instagram: "@pedroprendim" };
 let cfg = { ...PADRAO, dias: 3, msgTipo: "completa", refs: "", estilo: "" };
 const completarCfg = () => { for (const [k, v] of Object.entries(PADRAO)) if (!cfg[k]) cfg[k] = v; };
 let resultados = [];       // extraídos, ainda não no funil
@@ -1144,7 +1145,11 @@ function perfil(l) {
 
 // ---------- mensagens prontas ----------
 const apresentacao = () => `Meu nome é ${cfg.nome || "[SEU NOME]"}, sou web designer e crio sites para negócios locais.`;
-const portfolio = () => cfg.portfolio ? `\n\nAqui você conhece meu trabalho: ${cfg.portfolio}` : "";
+const portfolio = () => {
+  const ig = cfg.instagram ? `https://instagram.com/${String(cfg.instagram).replace(/^@|^https?:\/\/(www\.)?instagram\.com\//g, "").replace(/\/.*$/, "")}` : "";
+  if (cfg.portfolio && ig) return `\n\nAqui você conhece meu trabalho:\n• Portfólio: ${cfg.portfolio}\n• Instagram: ${ig}`;
+  return cfg.portfolio || ig ? `\n\nAqui você conhece meu trabalho: ${cfg.portfolio || ig}` : "";
+};
 function msgOla(l, tipo = cfg.msgTipo || "completa") {
   const emp = nomeCurto(l), v = hashN(l.id || l.nome, 3), p = perfil(l), o = ondeFica(l);
   const eu = tipo === "curta" ? (cfg.nome ? `Aqui é ${cfg.nome}. ` : "") : apresentacao() + " ";
@@ -1735,11 +1740,11 @@ $("#pGerar").addEventListener("click", () => { if (pAtual) abrirGerado(pAtual); 
 $("#mSite").addEventListener("click", () => { if (atual) abrirGerado(atual.id); });
 
 // ---------------- configurações ----------------
-function preencherCfg() { $("#cfgNome").value = cfg.nome || ""; $("#cfgOferta").value = cfg.oferta || ""; $("#cfgDias").value = cfg.dias || 3; $("#cfgPreco").value = cfg.preco || ""; $("#cfgPrazo").value = cfg.prazo || ""; $("#cfgPortfolio").value = cfg.portfolio || ""; $("#cfgRefs").value = cfg.refs || ""; $("#cfgEstilo").value = cfg.estilo || ""; }
+function preencherCfg() { $("#cfgNome").value = cfg.nome || ""; $("#cfgOferta").value = cfg.oferta || ""; $("#cfgDias").value = cfg.dias || 3; $("#cfgPreco").value = cfg.preco || ""; $("#cfgPrazo").value = cfg.prazo || ""; $("#cfgPortfolio").value = cfg.portfolio || ""; $("#cfgInsta").value = cfg.instagram || ""; $("#cfgRefs").value = cfg.refs || ""; $("#cfgEstilo").value = cfg.estilo || ""; }
 $("#formCfg").addEventListener("submit", (e) => {
   e.preventDefault();
   cfg = { ...cfg, nome: $("#cfgNome").value.trim(), oferta: $("#cfgOferta").value.trim(), dias: Math.max(1, Number($("#cfgDias").value) || 3),
-    preco: $("#cfgPreco").value.trim().slice(0, 120), prazo: $("#cfgPrazo").value.trim().slice(0, 60), portfolio: $("#cfgPortfolio").value.trim().slice(0, 200), refs: $("#cfgRefs").value.trim().slice(0, 1500), estilo: $("#cfgEstilo").value.trim().slice(0, 1000) };
+    preco: $("#cfgPreco").value.trim().slice(0, 120), prazo: $("#cfgPrazo").value.trim().slice(0, 60), portfolio: $("#cfgPortfolio").value.trim().slice(0, 200), instagram: $("#cfgInsta").value.trim().slice(0, 100), refs: $("#cfgRefs").value.trim().slice(0, 1500), estilo: $("#cfgEstilo").value.trim().slice(0, 1000) };
   salvarCfg(); toast("Configurações salvas");
 });
 

@@ -197,6 +197,7 @@ const views = {
         <div class="row2"><label class="f">Preço (entra na resposta "quanto custa?")<input name="preco" value="${esc(c.preco || "")}" placeholder="R$ 497, em até 12x"></label>
         <label class="f">Prazo de entrega<input name="prazo" value="${esc(c.prazo || "")}" placeholder="3 dias"></label></div>
         <label class="f">Link do seu portfólio (vai nas mensagens)<input name="portfolio" value="${esc(c.portfolio || "")}" placeholder="https://pedroprendim.com"></label>
+        <label class="f">Seu Instagram (vai nas mensagens)<input name="instagram" value="${esc(c.instagram || "")}" placeholder="@pedroprendim"></label>
         <label class="f">Dias até o follow-up depois do primeiro contato<input name="diasFollowup" type="number" min="1" max="60" value="${c.diasFollowup || 3}"></label>
         <label class="f">Chave da API Claude (opcional)<input name="anthropicKey" type="password" autocomplete="off" placeholder="${c.temChave ? "Chave salva. Cole outra para trocar." : "sk-ant-…"}"></label>
         <p class="muted" style="margin:-6px 0 0;font-size:12px">${c.temChave ? "Mensagens escritas pelo Claude. " : "Sem chave, o app usa um modelo de mensagem pronto. "}A chave fica só neste computador, em data/db.json.</p>

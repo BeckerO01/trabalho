@@ -52,7 +52,11 @@ function cenariosDe(etapa, l) {
 const DICA_ETAPA = { novo: "Ainda não recebeu mensagem.", contatado: "Você mandou mensagem e ainda não teve resposta.", respondeu: "O cliente respondeu. Escolha o que ele disse ou cole a resposta para a IA ajudar.",
   negociando: "Tem interesse: proposta e negociação.", fechado: "Cliente fechado.", perdido: "Não quis ou não respondeu depois de várias tentativas." };
 const apresentacao = () => `Meu nome é ${cfg.nome || "[SEU NOME]"}, sou web designer e crio sites para negócios locais.`;
-const portfolio = () => cfg.portfolio ? `\n\nAqui você conhece meu trabalho: ${cfg.portfolio}` : "";
+const portfolio = () => {
+  const ig = cfg.instagram ? `https://instagram.com/${String(cfg.instagram).replace(/^@|^https?:\/\/(www\.)?instagram\.com\//g, "").replace(/\/.*$/, "")}` : "";
+  if (cfg.portfolio && ig) return `\n\nAqui você conhece meu trabalho:\n• Portfólio: ${cfg.portfolio}\n• Instagram: ${ig}`;
+  return cfg.portfolio || ig ? `\n\nAqui você conhece meu trabalho: ${cfg.portfolio || ig}` : "";
+};
 function msgOla(l, tipo = cfg.msgTipo || "completa") {
   const emp = nomeCurto(l), v = hashN(l.id || l.nome, 3), p = perfil(l), o = ondeFica(l);
   const eu = tipo === "curta" ? (cfg.nome ? `Aqui é ${cfg.nome}. ` : "") : apresentacao() + " ";
