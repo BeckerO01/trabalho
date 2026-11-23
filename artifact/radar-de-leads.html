@@ -68,6 +68,8 @@ textarea { resize: vertical; }
 .import { border-color: var(--accent); }
 .import code { font-family: var(--f-mono); font-size: 12px; }
 .ou { text-align: center; color: var(--muted); font-size: 13px; margin: 18px 0 12px; }
+.site-on { font: 600 11px var(--f-mono); color: var(--accent); }
+.site-on a { color: inherit; }
 .tag-sem { font: 600 10px var(--f-mono); letter-spacing: .05em; text-transform: uppercase; color: var(--hot); }
 .chs { display: inline-flex; gap: 4px; flex-wrap: wrap; }
 .ch { font: 600 10px/1 var(--f-mono); padding: 4px 6px; border-radius: 6px; background: var(--sunk); color: var(--muted); }
@@ -319,7 +321,7 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
       <button class="btn" id="mGerar">✨ Responder com IA</button>
       <button class="btn" id="mCopiar">Copiar</button>
       <button class="btn" id="mPrompt">Prompt do site</button>
-      <button class="btn" id="mSite">Gerar site</button>
+      <button class="btn" id="mSite">Prévia do site</button>
       <a class="btn wa" id="mWhats" target="_blank" rel="noopener">Abrir no WhatsApp ↗</a>
     </div>
     <div class="actions">
@@ -352,7 +354,7 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
       <button class="btn primary" id="gBaixar">Baixar site (.html)</button>
       <button class="btn" id="gCopiar">Copiar HTML</button>
     </div>
-    <p class="hint-s">Prévia abaixo. Gerado sem usar o Claude. O mapa do Google só aparece no site publicado.</p>
+    <p class="hint-s">Prévia gerada sem usar o Claude. Para publicar em nomedocliente.pedroprendim.com, use <b>Criar site de demonstração</b> no programa do PC: o link volta para cá quando você clicar em "Enviar ao Claude".</p>
     <iframe id="gFrame" title="Prévia do site" sandbox="allow-scripts allow-popups"></iframe>
   </div>
 </dialog>
@@ -613,6 +615,7 @@ function importar(texto) {
       instagram: txt(x.instagram, 60), facebook: txt(x.facebook, 120), site: linkSeguro(x.site) ? txt(x.site) : "",
       siteTipo: ["nenhum", "rede_social", "proprio"].includes(x.siteTipo) ? x.siteTipo : "", mapsUrl: linkSeguro(x.mapsUrl) ? txt(x.mapsUrl, 500) : "",
       nota: Number(x.nota) || null, avaliacoes: Number(x.avaliacoes) || null, cidade: txt(x.cidade, 60),
+      siteUrl: linkSeguro(x.siteDemo) ? txt(x.siteDemo, 200) : "",
       score: Math.max(0, Math.min(100, Number(x.score) || 0)), motivos: Array.isArray(x.motivos) ? x.motivos.slice(0, 12).map((m) => txt(m, 80)) : [],
     };
     if (antigo) { salvarLead({ ...antigo, ...dados, id: antigo.id }); atualizados++; }
@@ -656,7 +659,7 @@ function renderKanban() {
       ${it.length ? it.map((l) => {
         const atras = l.followup && l.followup <= h && ativo(l);
         return `<button class="kcard" draggable="true" data-id="${l.id}"><span class="t">${esc(l.nome)}</span>
-          <span class="s">${pill(l.score)}${semSiteTag(l)}${l.origem === "pc" ? canais(l) : ""}<span>${esc(rotulo(l))}${l.cidade ? " · " + esc(l.cidade) : ""}</span>
+          <span class="s">${pill(l.score)}${l.siteUrl ? '<span class="site-on">● site no ar</span>' : semSiteTag(l)}${l.origem === "pc" ? canais(l) : ""}<span>${esc(rotulo(l))}${l.cidade ? " · " + esc(l.cidade) : ""}</span>
           ${l.followup ? `<span class="${atras ? "due" : ""}">⏰ ${br(l.followup)}</span>` : ""}</span></button>`;
       }).join("") : `<div class="empty-col">Arraste um lead para cá</div>`}</div>`;
   }).join("");
@@ -726,7 +729,7 @@ function abrir(id) {
   const site = l.siteTipo === "nenhum" ? '<span class="tag-sem">Sem site: ótima oportunidade</span>'
     : l.siteTipo === "rede_social" ? `<span><span class="tag-sem">Sem site próprio</span> · só ${l.site ? `<a href="${esc(l.site)}" target="_blank" rel="noopener">${esc(l.site.replace(/^https:\/\/(www\.)?/, "").slice(0, 40))}</a>` : "rede social"}</span>`
     : l.siteTipo === "proprio" && l.site ? `<span>Site: <a href="${esc(l.site)}" target="_blank" rel="noopener">${esc(l.site.replace(/^https:\/\/(www\.)?/, "").slice(0, 50))}</a></span>` : "";
-  $("#mInfo").innerHTML = `<span>${pill(l.score)} ${esc(rotulo(l))}${l.cidade ? " · " + esc(l.cidade) : ""}</span>${site}
+  $("#mInfo").innerHTML = `<span>${pill(l.score)} ${esc(rotulo(l))}${l.cidade ? " · " + esc(l.cidade) : ""}</span>${l.siteUrl ? `<span class="site-on">● Site de demonstração no ar: <a href="${esc(l.siteUrl)}" target="_blank" rel="noopener">${esc(l.siteUrl.replace(/^https:\/\//, "").replace(/\/$/, ""))}</a></span>` : ""}${site}
     ${l.whatsapp ? `<span>WhatsApp: ${esc(telBR(l.whatsapp))}${l.whatsappFonte === "celular" ? " (provável)" : ""}</span>` : ""}
     ${l.email ? `<span>E-mail: ${esc(l.email)}</span>` : ""}${l.instagram ? `<span>◎ ${esc(l.instagram)}</span>` : ""}${l.endereco ? `<span>⌖ ${esc(l.endereco)}</span>` : ""}
     ${l.nota ? `<span>★ ${l.nota}${l.avaliacoes ? ` (${l.avaliacoes} avaliações)` : ""}${l.mapsUrl ? ` · <a href="${esc(l.mapsUrl)}" target="_blank" rel="noopener">Ver no Maps ↗</a>` : ""}</span>` : ""}
@@ -735,7 +738,7 @@ function abrir(id) {
   $("#mNotas").value = l.notas || ""; $("#mMsg").value = l.mensagem || "";
   $("#mResp").value = l.respostaCliente || "";
   renderEtapaModal();
-  if (!l.mensagem) $("#mMsg").value = CENARIOS[l.etapa]?.[l.etapa === "contatado" ? Math.min(Math.max((l.tentativas || 1) - 1, 0), 2) : 0]?.[1](l) || "";
+  if (!l.mensagem) $("#mMsg").value = (l.siteUrl && !l.siteEnviado ? cenariosDe("novo", l)[0] : cenariosDe(l.etapa, l)[l.etapa === "contatado" ? Math.min(Math.max((l.tentativas || 1) - 1, 0), 2) : 0])?.[1](l) || "";
   atualizarWhats(); if (!$("#modal").open) $("#modal").showModal();
 }
 function atualizarWhats() {
@@ -767,6 +770,7 @@ $("#mWhats").addEventListener("click", () => {
   if (atual.etapa === "novo") { moverEtapa(atual, "contatado"); atual.tentativas = 1; toast(`Enviado · aguardando resposta, retorno em ${br(atual.followup)}`); }
   else if (atual.etapa === "contatado") { atual.tentativas = (atual.tentativas || 1) + 1; atual.followup = somarDias(hoje(), Number(cfg.dias) || 3); toast(`Tentativa ${atual.tentativas} · próximo retorno em ${br(atual.followup)}`); }
   else if (ativo(atual)) atual.followup = somarDias(hoje(), Number(cfg.dias) || 3);
+  if (atual.siteUrl && $("#mMsg").value.includes(atual.siteUrl)) atual.siteEnviado = true;
   $("#mEtapa").value = atual.etapa; $("#mFollow").value = atual.followup || "";
   atual.mensagem = "";  // a próxima abertura sugere a mensagem certa para a etapa
   setTimeout(() => { salvarLead({ ...atual }); renderEtapaModal(); }, 400);
@@ -807,6 +811,14 @@ const CENARIOS = {
     ["Retomar depois de um tempo", (l) => `Olá! ${cfg.nome ? "Aqui é " + cfg.nome + ". " : ""}Conversamos há um tempo sobre um site para ${nomeCurto(l)}. Estou com agenda aberta este mês e lembrei de vocês. Faz sentido retomar a conversa?`],
   ],
 };
+// mensagem do site de demonstração (o site é criado e publicado pelo programa do PC)
+const msgSite = (l) => `Olá, tudo bem? Criei um site de demonstração para a ${nomeCurto(l)}: ${l.siteUrl}\n\nDá uma olhada e me diz o que achou!`;
+function cenariosDe(etapa, l) {
+  const base = CENARIOS[etapa] || [];
+  if (!l?.siteUrl || ["fechado", "perdido"].includes(etapa)) return base;
+  const site = [l.siteEnviado ? "Mandar o link do site de novo" : "Mandar o site pronto", msgSite];
+  return l.siteEnviado ? [...base, site] : [site, ...base];
+}
 const DICA_ETAPA = { novo: "Ainda não recebeu mensagem.", contatado: "Você mandou mensagem e ainda não teve resposta.", respondeu: "O cliente respondeu. Escolha o que ele disse ou cole a resposta para a IA ajudar.",
   negociando: "Tem interesse: proposta e negociação.", fechado: "Cliente fechado.", perdido: "Não quis ou não respondeu depois de várias tentativas." };
 function renderEtapaModal() {
@@ -814,7 +826,7 @@ function renderEtapaModal() {
   const e = $("#mEtapa").value || atual.etapa;
   $("#mEtapas").innerHTML = ETAPAS.map(([v, n]) => `<button type="button" class="etapa-b" data-etapa="${v}" aria-pressed="${v === e}">${n}</button>`).join("");
   $("#mCenLbl").textContent = `Mensagens prontas · ${ETAPAS.find((x) => x[0] === e)?.[1]}`;
-  $("#mCenarios").innerHTML = (CENARIOS[e] || []).map(([nome], i) => `<button type="button" class="cen" data-cen="${i}" aria-pressed="false">${esc(nome)}</button>`).join("");
+  $("#mCenarios").innerHTML = cenariosDe(e, atual).map(([nome], i) => `<button type="button" class="cen" data-cen="${i}" aria-pressed="false">${esc(nome)}</button>`).join("");
   $("#mTent").textContent = DICA_ETAPA[e] + (e === "contatado" && atual.tentativas ? ` Tentativas até agora: ${atual.tentativas}.` : "");
 }
 $("#mEtapas").addEventListener("click", (ev) => {
@@ -822,14 +834,14 @@ $("#mEtapas").addEventListener("click", (ev) => {
   const nova = b.dataset.etapa; if (nova === atual.etapa) return;
   $("#mEtapa").value = nova; moverEtapa(atual, nova); $("#mFollow").value = atual.followup || "";
   // troca a mensagem pela primeira pronta da nova etapa
-  $("#mMsg").value = CENARIOS[nova]?.[0]?.[1](atual) || ""; atualizarWhats();
+  $("#mMsg").value = cenariosDe(nova, atual)[0]?.[1](atual) || ""; atualizarWhats();
   coletar(); atual.mensagem = ""; salvarLead({ ...atual }); renderEtapaModal();
   toast(`Movido para ${ETAPAS.find((x) => x[0] === nova)?.[1]}${atual.followup ? " · retorno em " + br(atual.followup) : ""}`);
 });
 $("#mCenarios").addEventListener("click", (ev) => {
   const b = ev.target.closest("[data-cen]"); if (!b || !atual) return;
   const e = $("#mEtapa").value;
-  $("#mMsg").value = CENARIOS[e][Number(b.dataset.cen)][1](atual); atualizarWhats();
+  $("#mMsg").value = cenariosDe(e, atual)[Number(b.dataset.cen)][1](atual); atualizarWhats();
   document.querySelectorAll("#mCenarios .cen").forEach((c) => c.setAttribute("aria-pressed", String(c === b)));
 });
 
@@ -847,7 +859,7 @@ $("#mGerar").addEventListener("click", async () => {
   if (gerando) { gerando.abort(); return; }
   coletar();
   const sample = await getSample();
-  if (!sample) { box.value = CENARIOS[atual.etapa]?.[0]?.[1](atual) || mensagemPronta(atual); atualizarWhats(); toast("IA indisponível aqui: usei uma mensagem pronta"); return; }
+  if (!sample) { box.value = cenariosDe(atual.etapa, atual)[0]?.[1](atual) || mensagemPronta(atual); atualizarWhats(); toast("IA indisponível aqui: usei uma mensagem pronta"); return; }
   gerando = new AbortController(); btn.textContent = "Parar"; const antes = box.value; box.value = "Escrevendo…";
   const etapa = atual.etapa, resp = $("#mResp").value.trim().slice(0, 1500);
   const proximo = { novo: "abrir a conversa e pedir para falar com o responsável", contatado: "retomar o contato sem insistir demais", respondeu: "oferecer uma prévia gratuita do site", negociando: "fechar a proposta", fechado: "combinar os próximos passos da entrega", perdido: "agradecer e deixar a porta aberta" }[etapa];
@@ -867,7 +879,7 @@ $("#mGerar").addEventListener("click", async () => {
     box.value = text.trim();
   } catch (e) {
     if (e?.code === "cancelled") box.value = e.text || antes;
-    else { box.value = CENARIOS[atual.etapa]?.[0]?.[1](atual) || mensagemPronta(atual); toast(erroIA(e?.code) + " Usei uma mensagem pronta."); }
+    else { box.value = cenariosDe(atual.etapa, atual)[0]?.[1](atual) || mensagemPronta(atual); toast(erroIA(e?.code) + " Usei uma mensagem pronta."); }
   } finally { gerando = null; btn.textContent = "✨ Responder com IA"; atualizarWhats(); }
 });
 
@@ -1147,7 +1159,7 @@ function renderMsgs() {
     return;
   }
   box.innerHTML = fila.slice(0, msgLimite).map((l, i) => {
-    const texto = l.mensagem || msgOla(l);
+    const texto = l.mensagem || (l.siteUrl ? msgSite(l) : msgOla(l));
     return `<article class="msg" data-id="${esc(l.id)}">
       <div class="lead-h"><div><h4>${i + 1}. ${esc(l.nome)}</h4><div class="meta"><span>${esc(rotulo(l))}${ondeFica(l).bairro ? " · " + esc(ondeFica(l).bairro) : ""} · ${esc(telBR(l.whatsapp || l.telefone))}</span></div></div>${pill(l.score)}</div>
       <div class="s">${semSiteTag(l)}${l.mensagem ? '<span class="ch on">EDITADA</span>' : ""}</div>
@@ -1165,7 +1177,7 @@ $("#listaMsgs").addEventListener("focusout", (e) => {
   const card = e.target.closest(".msg"); if (!card || e.target.tagName !== "TEXTAREA") return;
   const l = leads[card.dataset.id];
   setTimeout(() => {
-    if (l && e.target.value !== (l.mensagem || msgOla(l))) salvarLead({ ...l, mensagem: e.target.value });
+    if (l && e.target.value !== (l.mensagem || (l.siteUrl ? msgSite(l) : msgOla(l)))) salvarLead({ ...l, mensagem: e.target.value });
     else if (msgSujo) renderMsgs();
   }, 250);
 });
