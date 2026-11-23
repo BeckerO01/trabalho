@@ -53,14 +53,14 @@ function badges() {
 }
 
 // ---------- tabela de leads (com filtros) ----------
-const filtro = { texto: "", etapa: "", categoria: "", semSite: false, wa: false, nota4: false, ocultarDesc: true, ordem: "score" };
+const filtro = { texto: "", etapa: "", categoria: "", semSite: false, wa: false, nota4: false, ocultarDesc: true, naoContatados: false, ordem: "score" };
 function tabelaLeads(lista, idTabela) {
   const cats = [...new Set(lista.map((l) => l.categoria).filter(Boolean))].sort();
   const t = filtro.texto.toLowerCase();
   const vis = lista.filter((l) =>
     (!t || `${l.nome} ${l.endereco} ${l.telefone} ${l.categoria}`.toLowerCase().includes(t)) &&
     (!filtro.etapa || l.etapa === filtro.etapa) && (!filtro.categoria || l.categoria === filtro.categoria) &&
-    (!filtro.semSite || l.siteTipo !== "proprio") && (!filtro.wa || l.whatsapp) && (!filtro.nota4 || l.nota >= 4) &&
+    (!filtro.semSite || l.siteTipo !== "proprio") && (!filtro.wa || l.whatsapp) && (!filtro.nota4 || l.nota >= 4) && (!filtro.naoContatados || l.etapa === "novo") &&
     (!filtro.ocultarDesc || !l.descartado))
     .sort((a, b) => filtro.ordem === "nota" ? (b.nota || 0) - (a.nota || 0) || (b.avaliacoes || 0) - (a.avaliacoes || 0) : b.score - a.score);
   const chip = (k, txt) => `<button class="chip" data-chip="${k}" aria-pressed="${filtro[k]}">${txt}</button>`;
@@ -68,7 +68,7 @@ function tabelaLeads(lista, idTabela) {
       <input type="search" id="f-texto-${idTabela}" data-f="texto" placeholder="Filtrar por nome, bairro, telefone…" value="${esc(filtro.texto)}">
       <select data-f="etapa" aria-label="Etapa"><option value="">Todos os status</option>${ETAPAS.map(([v, n]) => `<option value="${v}" ${filtro.etapa === v ? "selected" : ""}>${n}</option>`).join("")}</select>
       <select data-f="categoria" aria-label="Categoria"><option value="">Todas as categorias</option>${cats.map((c) => `<option ${filtro.categoria === c ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
-      ${chip("semSite", "Sem site")} ${chip("wa", "Com WhatsApp")} ${chip("nota4", "★ 4+")} ${chip("ocultarDesc", "Ocultar descartados")}
+      ${chip("naoContatados", "Não contatados")} ${chip("semSite", "Sem site")} ${chip("wa", "Com WhatsApp")} ${chip("nota4", "★ 4+")} ${chip("ocultarDesc", "Ocultar descartados")}
       <span class="spacer"></span><a class="btn sm" href="/api/export.csv?ids=${vis.map((l) => l.id).join(",")}">CSV</a>
       <button class="btn sm primary" data-enviar="${vis.filter((l) => !l.descartado).map((l) => l.id).join(",")}">Enviar ${vis.filter((l) => !l.descartado).length} ao Claude</button>
     </div>
@@ -161,13 +161,15 @@ const views = {
         <div class="stat"><div class="k">Empresas</div><div class="v">${b.empresas}</div><div class="d">${b.novos} novas na base</div></div>
         <div class="stat"><div class="k">Com WhatsApp</div><div class="v">${b.comWhatsapp}</div><div class="d">${pctFmt(b.comWhatsapp, b.empresas)}</div></div>
         <div class="stat"><div class="k">Com e-mail</div><div class="v">${b.comEmail}</div><div class="d">${pctFmt(b.comEmail, b.empresas)}</div></div>
-        <div class="stat destaque"><div class="k">Sem site</div><div class="v">${b.semSite}</div><div class="d">oportunidade para quem vende site</div></div>
+        <div class="stat destaque"><div class="k">Sem site</div><div class="v">${b.semSite}</div><div class="d">${lista.filter((l) => l.etapa !== "novo").length ? `${lista.filter((l) => l.etapa !== "novo").length} você já contatou` : "oportunidade para quem vende site"}</div></div>
       </div>
       ${lista.length || !ativa ? tabelaLeads(lista, "busca") : `<div class="card vazio"><h3>${esc(b.progresso?.fase || "Na fila")}</h3><p>As empresas aparecem aqui conforme são encontradas.</p></div>`}`];
   },
 
   leads() {
-    return ["Prospecção / <b>Leads</b>", `<div class="page-h"><div><h1>Leads</h1><p>Todas as empresas encontradas, sem repetição.</p></div></div>${S.leads.length ? tabelaLeads(S.leads, "leads") : `<div class="card vazio"><h3>Nenhum lead ainda</h3><p>As empresas que suas buscas encontrarem aparecem aqui.</p><a class="btn primary" href="#nova">Nova busca</a></div>`}`];
+    const cont = S.leads.filter((l) => l.etapa !== "novo").length;
+    return ["Prospecção / <b>Leads</b>", `<div class="page-h"><div><h1>Leads</h1><p>Todas as empresas encontradas, sem repetição.${cont ? ` ${cont} já contatados.` : ""}</p></div>
+      <div class="acoes"><label class="btn" title="Arquivo gerado no Radar do Claude em Funil → Enviar status ao PC">Importar do Claude<input type="file" accept=".json,application/json" id="impStatus" hidden></label></div></div>${S.leads.length ? tabelaLeads(S.leads, "leads") : `<div class="card vazio"><h3>Nenhum lead ainda</h3><p>As empresas que suas buscas encontrarem aparecem aqui.</p><a class="btn primary" href="#nova">Nova busca</a></div>`}`];
   },
 
   funil() {
@@ -274,6 +276,18 @@ document.addEventListener("submit", async (e) => {
     if (!f.hostingerToken) delete f.hostingerToken;
     S.config = await api("PUT", "config", f); $("#view").dataset.v = ""; render(); toast("Configurações salvas");
   }
+});
+
+// ---------- importar status do Radar no Claude ----------
+document.addEventListener("change", async (e) => {
+  if (e.target.id !== "impStatus" || !e.target.files[0]) return;
+  try {
+    const dados = JSON.parse(await e.target.files[0].text());
+    const r = await api("POST", "status", dados);
+    await atualizar(); render();
+    toast(`${r.atualizados} leads atualizados · ${r.contatados} já contatados${r.naoEncontrados ? ` · ${r.naoEncontrados} não estão neste PC` : ""}.`);
+  } catch (err) { toast(err instanceof SyntaxError ? "Arquivo inválido." : err.message); }
+  e.target.value = "";
 });
 
 // ---------- enviar ao Radar no Claude ----------

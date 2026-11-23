@@ -268,6 +268,7 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
     <div class="toolbar">
       <input id="filtro" placeholder="Filtrar por nome, nicho ou cidade" aria-label="Filtrar leads">
       <button class="btn" id="btnCsv">Exportar CSV</button>
+      <button class="btn" id="btnStatus" title="Leva ao programa do PC quem você já contatou">Enviar status ao PC</button>
     </div>
     <div id="funilEmpty" class="empty" hidden>
       <h3>Seu funil está vazio</h3>
@@ -553,7 +554,8 @@ $("#btnExtrair").addEventListener("click", async () => {
   } finally { btn.disabled = false; }
 });
 
-function jaNoFunil(l) { const k = (l.nome + "|" + (l.telefone || "")).toLowerCase(); return Object.values(leads).some((x) => (x.nome + "|" + (x.telefone || "")).toLowerCase() === k); }
+function noFunil(l) { const k = chave(l); return Object.values(leads).find((x) => chave(x) === k); }
+function jaNoFunil(l) { return Boolean(noFunil(l)); }
 function renderResultados() {
   $("#resHead").hidden = !resultados.length;
   $("#resInfo").textContent = `${resultados.length} leads sem site, do mais quente ao mais frio`;
@@ -566,7 +568,7 @@ function renderResultados() {
       <div class="why">${esc(l.motivos.join(" · "))}</div>
       <div class="lead-f">
         <a class="btn ghost sm" target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent(l.nome + " " + l.cidade)}">Conferir no Google ↗</a>
-        <button class="btn sm ${dentro ? "" : "primary"}" data-add="${l.id}" ${dentro ? "disabled" : ""}>${dentro ? "No funil" : "+ Funil"}</button>
+        <button class="btn sm ${dentro ? "" : "primary"}" data-add="${l.id}" ${dentro ? "disabled" : ""}>${dentro ? (noFunil(l).etapa === "novo" ? "No funil" : "Já contatado · " + (ETAPAS.find((e) => e[0] === noFunil(l).etapa)?.[1] || "")) : "+ Funil"}</button>
       </div></article>`;
   }).join("");
 }
@@ -604,7 +606,7 @@ function importar(texto) {
   let d;
   try { d = JSON.parse(String(texto).trim()); } catch { throw new Error("Isso não parece um código do Radar. No PC, clique em \"Enviar ao Claude\" e cole de novo."); }
   if (d?.formato !== "radar-leads" || !Array.isArray(d.leads)) throw new Error("Arquivo ou código não reconhecido. Use o botão \"Enviar ao Claude\" do programa no PC.");
-  let novos = 0, atualizados = 0;
+  let novos = 0, atualizados = 0, jaContatados = 0;
   for (const x of d.leads.slice(0, 500)) {
     if (!x || !x.nome) continue;
     const id = txt(x.id, 40).replace(/[^a-zA-Z0-9_-]/g, "") || novoId();
@@ -618,20 +620,20 @@ function importar(texto) {
       siteUrl: linkSeguro(x.siteDemo) ? txt(x.siteDemo, 200) : "",
       score: Math.max(0, Math.min(100, Number(x.score) || 0)), motivos: Array.isArray(x.motivos) ? x.motivos.slice(0, 12).map((m) => txt(m, 80)) : [],
     };
-    if (antigo) { salvarLead({ ...antigo, ...dados, id: antigo.id }); atualizados++; }
+    if (antigo) { salvarLead({ ...antigo, ...dados, id: antigo.id }); atualizados++; if (antigo.etapa !== "novo") jaContatados++; }
     else {
       const etapa = ETAPAS.some((e) => e[0] === x.etapa) ? x.etapa : "novo";
       salvarLead({ ...dados, id, nicho: "", etapa, notas: txt(x.notas, 2000), mensagem: "", followup: /^\d{4}-\d{2}-\d{2}$/.test(x.followup || "") ? x.followup : "", criadoEm: hoje() });
       novos++;
     }
   }
-  return { novos, atualizados };
+  return { novos, atualizados, jaContatados };
 }
 function rodarImport(texto) {
   const st = $("#importStatus"); st.classList.remove("err");
   try {
-    const { novos, atualizados } = importar(texto);
-    st.textContent = `${novos} leads novos e ${atualizados} atualizados. Veja no Funil.`;
+    const { novos, atualizados, jaContatados } = importar(texto);
+    st.textContent = `${novos} leads novos` + (atualizados ? ` · ${atualizados} já estavam no funil` : "") + (jaContatados ? ` (${jaContatados} você já contatou: continuam na etapa em que estavam)` : "") + ". Veja no Funil.";
     $("#importTxt").value = ""; toast("Leads importados do PC");
   } catch (e) { st.textContent = e.message; st.classList.add("err"); }
 }
@@ -683,6 +685,18 @@ $("#btnCsv").addEventListener("click", async () => {
   const dl = window.claude?.use ? await claude.use("downloads") : null;
   if (!dl) { toast("Download indisponível aqui"); return; }
   try { await dl.save({ filename: `leads-${hoje()}.csv`, data: csv }); } catch (e) { if (e?.code !== "declined") toast("Download cancelado"); }
+});
+
+$("#btnStatus").addEventListener("click", async () => {
+  const lista = Object.values(leads).map((l) => ({ id: l.id, nome: l.nome, telefone: l.telefone || "", whatsapp: l.whatsapp || "", etapa: l.etapa,
+    tentativas: l.tentativas || 0, followup: l.followup || "", notas: l.notas || "", siteEnviado: Boolean(l.siteEnviado) }));
+  const pacote = JSON.stringify({ formato: "radar-status", versao: 1, exportadoEm: new Date().toISOString(), leads: lista });
+  const contatados = lista.filter((l) => l.etapa !== "novo").length;
+  const dl = window.claude?.use ? await claude.use("downloads") : null;
+  if (dl) {
+    try { await dl.save({ filename: `radar-status-${hoje()}.json`, data: pacote }); toast(`${lista.length} leads (${contatados} já contatados). No PC: Leads → Importar do Claude.`); return; } catch {}
+  }
+  try { await navigator.clipboard.writeText(pacote); toast("Status copiado. No PC: Leads → Importar do Claude → colar."); } catch { toast("Não foi possível exportar aqui."); }
 });
 
 // ---------------- follow-ups ----------------

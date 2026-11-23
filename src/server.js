@@ -269,6 +269,26 @@ async function api(req, res, url) {
     if (!acao && m === "GET") return json(res, 200, lead.siteDemo || null);
   }
 
+  if (recurso === "status" && m === "POST") {
+    // status vindo do Radar no Claude: quem já foi contatado, respondeu etc.
+    const b = await corpo(req);
+    if (b?.formato !== "radar-status" || !Array.isArray(b.leads)) return json(res, 400, { erro: "Arquivo não reconhecido. No Radar do Claude, use \"Enviar status ao PC\"." });
+    const chave = (x) => `${String(x.nome || "").trim().toLowerCase()}|${String(x.telefone || x.whatsapp || "").replace(/\D/g, "").replace(/^55/, "")}`;
+    const porChave = new Map(Object.values(db.leads).map((l) => [chave(l), l]));
+    let atualizados = 0, contatados = 0, naoEncontrados = 0;
+    for (const x of b.leads.slice(0, 5000)) {
+      const l = db.leads[x?.id] || porChave.get(chave(x || {}));
+      if (!l) { naoEncontrados++; continue; }
+      if (ETAPAS.includes(x.etapa)) l.etapa = x.etapa;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(x.followup || "") || x.followup === "") l.followup = x.followup;
+      if (x.notas) l.notas = String(x.notas).slice(0, 2000);
+      l.tentativas = Number(x.tentativas) || 0; l.siteEnviado = Boolean(x.siteEnviado);
+      atualizados++; if (l.etapa !== "novo") contatados++;
+    }
+    salvarAgora();
+    return json(res, 200, { atualizados, contatados, naoEncontrados });
+  }
+
   if (recurso === "export.json" && m === "GET") {
     // pacote para importar no Radar de Leads do Claude
     const ids = url.searchParams.get("ids");
