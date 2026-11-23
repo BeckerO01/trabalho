@@ -42,6 +42,14 @@ Tudo fica num banco de dados SQLite (`radar.db`) na pasta `RadarDeLeads`, dentro
 
 O site é gerado a partir de `src/site/molde-aurora.html` com os perfis de ramo (`src/site/gerador.js`) e fica fora do Google (noindex).
 
+## Sites em teste (7 dias)
+Cada site de demonstração conta as visitas e os cliques no WhatsApp (robôs e as suas próprias visitas pelo programa não contam).
+Depois de 7 dias: **com visita**, o site fica **fixado** e aparece um aviso na tela inicial; **sem visita**, ele é apagado sozinho (arquivos e endereço).
+
+## Ligar junto com o computador
+- Windows: dois cliques em **Iniciar com o Windows.bat**. Ele liga o Radar escondido toda vez que o computador iniciar e cria o atalho **Radar de Leads** na área de trabalho. Para desfazer: **Parar inicio automatico.bat**.
+- Mac: **Iniciar com o Mac.command**.
+
 ## Enviar para o Claude (usar no celular)
 1. No programa, filtre os leads e clique em **Enviar ao Claude**: os leads são copiados e um arquivo `radar-leads-AAAA-MM-DD.json` é baixado.
 2. O Radar no Claude abre (https://claude.ai/artifact/ERs5tuq5h5d897HRbZSsLp). Em **Importar do PC**, cole (Ctrl+V) ou escolha o arquivo.

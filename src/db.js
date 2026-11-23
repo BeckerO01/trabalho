@@ -22,7 +22,7 @@ const BACKUPS = path.join(DIR, "backups");
 fs.mkdirSync(BACKUPS, { recursive: true });
 
 // dados do Pedro: valem até ele mudar em Configurações
-export const PADRAO = { nome: "Pedro Prendim", oferta: "Faço sites profissionais por R$ 497, em até 12x, e entrego em 3 dias.", preco: "R$ 497, em até 12x", prazo: "3 dias", portfolio: "https://pedroprendim.com", instagram: "@pedroprendim" };
+export const PADRAO = { nome: "Pedro Prendim", oferta: "Faço sites profissionais por R$ 497, em até 12x, e entrego em 3 dias.", preco: "R$ 497, em até 12x", prazo: "3 dias", portfolio: "https://pedroprendim.com", instagram: "@pedroprendim", apelido: "Becker" };
 
 const con = new DatabaseSync(ARQUIVO);
 con.exec(`

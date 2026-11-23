@@ -89,3 +89,22 @@ export async function testarConexao({ token, dominio }) {
   const subs = await listarSubdominios(token, conta, dominio);
   return { conta, subdominios: subs.length };
 }
+
+/** Visitas registradas pelo contador.php do site ({v: aberturas, w: cliques no WhatsApp, dias, primeira, ultima}). */
+export async function lerVisitas(url, chave) {
+  const r = await fetch(`${url.replace(/\/?$/, "/")}contador.php?ler=${encodeURIComponent(chave)}&t=${Date.now()}`, { signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error(`contador respondeu ${r.status}`);
+  return r.json();
+}
+
+/** Apaga o site: a pasta public_html/<sub> (pelo serviço de arquivos) e o subdomínio. */
+export async function removerSite({ token, dominio }, sub) {
+  if (!/^[a-z0-9-]+$/.test(sub)) throw new Error("subdomínio inválido");
+  const conta = await descobrirConta(token, dominio);
+  const chaves = await urlEnvio(token, conta, dominio);
+  const base = chaves.url.replace(/\/api\/tus\/public_html\/?$/, "/api/resources/public_html");
+  const r = await fetch(`${base}/${sub}`, { method: "DELETE", headers: { "X-Auth": chaves.auth_key, "X-Auth-Rest": chaves.rest_auth_key }, signal: AbortSignal.timeout(30000) });
+  if (!r.ok && r.status !== 404) throw new Error(`não consegui apagar os arquivos (${r.status})`);
+  try { await api(token, "DELETE", `/api/hosting/v1/accounts/${conta}/websites/${dominio}/subdomains/${sub}`); }
+  catch (e) { if (e.status !== 404) throw e; }
+}

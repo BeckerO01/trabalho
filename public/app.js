@@ -91,26 +91,77 @@ document.addEventListener("click", (e) => {
 });
 
 // ---------- views ----------
+// saudação conforme a hora (a frase muda a cada abertura, mas fica igual durante a sessão)
+const FRASES = {
+  manha: ["Café na mão e bora achar cliente novo. ☕", "Dia novo, site novo. Bora prospectar?", "Manhã é a melhor hora pra mandar mensagem."],
+  tarde: ["Hora boa pra chamar quem ainda não respondeu.", "Bora transformar lead em cliente hoje?", "Que tal criar o site de alguém agora?"],
+  noite: ["Deixa os sites prontos pra mandar amanhã cedo.", "Dia produtivo? Bora fechar com chave de ouro.", "Revisa os retornos e depois descansa."],
+  madrugada: ["Trabalhando até tarde, hein? Bora fechar mais um.", "A madrugada é dos fortes. Só não esquece de dormir.", "Silêncio total: hora boa pra montar sites."],
+};
+const SORTE = Math.random();
+function periodo() {
+  const h = new Date().getHours();
+  const [k, sauda, emoji] = h >= 5 && h < 12 ? ["manha", "Bom dia", "☀️"] : h >= 12 && h < 18 ? ["tarde", "Boa tarde", "🌤️"] : h >= 18 ? ["noite", "Boa noite", "🌙"] : ["madrugada", "Boa madrugada", "✨"];
+  return { sauda, emoji, frase: FRASES[k][Math.floor(SORTE * FRASES[k].length)] };
+}
+// animações da tela inicial: digita o "Olá", conta os números e mantém o relógio
+function animarInicio() {
+  const ola = $("#ola");
+  if (ola && !window.__saudou) {
+    window.__saudou = true;
+    const nome = S.config.apelido || (S.config.nome || "").split(" ")[0] || "";
+    const txt = `Olá, ${nome}!`; let i = 0;
+    const passo = () => { i++; const t = txt.slice(0, i); ola.innerHTML = t.replace(nome, `<em>${esc(nome)}</em>`).replace(/<em>([^<]*)$/, "<em>$1</em>") + '<span class="cursor-dig"></span>'; if (i < txt.length) setTimeout(passo, 55 + Math.random() * 45); else setTimeout(() => { ola.innerHTML = `Olá, <em>${esc(nome)}</em>!`; }, 900); };
+    setTimeout(passo, 350);
+    document.querySelectorAll("[data-contar]").forEach((el) => {
+      const fim = Number(el.dataset.contar) || 0, t0 = performance.now();
+      const anda = (t) => { const p = Math.min(1, (t - t0) / 1100), e = 1 - Math.pow(1 - p, 3); el.textContent = Math.round(fim * e); if (p < 1) requestAnimationFrame(anda); };
+      requestAnimationFrame(anda);
+    });
+  }
+  clearInterval(animarInicio.t);
+  animarInicio.t = setInterval(() => { const r = $("#relogio"); if (r) r.textContent = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); else clearInterval(animarInicio.t); }, 15000);
+}
+
 const views = {
   inicio() {
     const L = S.leads.filter((l) => !l.descartado);
-    const h = new Date().getHours();
-    const sauda = h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
-    const semSite = L.filter((l) => l.siteTipo !== "proprio");
     const pend = pendentes();
+    const semSite = L.filter((l) => l.siteTipo !== "proprio");
+    const noAr = L.filter((l) => l.siteDemo?.status === "pronto");
+    const fix = noAr.filter((l) => l.siteDemo.fixado);
+    const avisos = (S.avisos || []).filter((a) => !a.lido);
     const max = Math.max(1, ...ETAPAS.map(([e]) => L.filter((l) => l.etapa === e).length));
-    return ["Início", `<div class="page-h"><div><h1>${sauda}${S.config.nome ? ", " + esc(S.config.nome) : ""}!</h1><p>Seu resumo de prospecção.</p></div></div>
+    const nome = S.config.apelido || (S.config.nome || "").split(" ")[0] || "";
+    const pd = periodo();
+    const resumo = [pend.length ? `<b>${pend.length}</b> retorno${pend.length > 1 ? "s" : ""} pra hoje` : "", fix.length ? `<b>${fix.length}</b> site${fix.length > 1 ? "s" : ""} com visitas` : "", noAr.length ? `<b>${noAr.length}</b> site${noAr.length > 1 ? "s" : ""} no ar` : ""].filter(Boolean);
+    const vis = (l) => l.siteDemo?.visitas || { v: 0, w: 0 };
+    const diasRest = (l) => Math.max(0, 7 - Math.floor((Date.now() - new Date(l.siteDemo.publicadoEm).getTime()) / 864e5));
+    return ["Início", `
+      <section class="boas anim" style="--i:0">
+        <div class="boas-txt">
+          <p class="boas-hora"><span class="pulso"></span>${pd.sauda} · <span id="relogio">${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span></p>
+          <h1 class="boas-ola" id="ola" aria-label="Olá, ${esc(nome)}!">${window.__saudou ? `Olá, <em>${esc(nome)}</em>!` : ""}</h1>
+          <p class="boas-frase">${pd.frase}</p>
+          ${resumo.length ? `<p class="boas-resumo">Você tem ${resumo.join(", ").replace(/, ([^,]*)$/, " e $1")}.</p>` : `<p class="boas-resumo">Tudo em dia. Bora achar cliente novo?</p>`}
+          <div class="acoes"><a class="btn primary" href="#nova">+ Nova busca</a>${pend.length ? `<a class="btn" href="#followups">Ver retornos</a>` : `<a class="btn" href="#funil">Abrir funil</a>`}</div>
+        </div>
+        <div class="boas-arte" aria-hidden="true"><i></i><i></i><i></i><b>${pd.emoji}</b></div>
+      </section>
+      ${avisos.length ? `<section class="avisos anim" style="--i:1"><div class="avisos-h"><b>🔔 Avisos</b><button class="btn sm ghost" data-avisos-lidos>Marcar como lidos</button></div>
+        ${avisos.slice(0, 6).map((a) => `<div class="aviso ${a.tipo}"><span>${a.tipo === "visitas" ? "📈" : "🗑️"}</span><p>${esc(a.texto)}</p>${a.tipo === "visitas" ? `<button class="btn sm" data-lead="${esc(a.leadId)}">Abrir lead</button>` : ""}</div>`).join("")}</section>` : ""}
+      ${fix.length ? `<section class="fixados anim" style="--i:2"><h2>📌 Sites com visitas</h2><div class="fix-grid">${fix.map((l) => `<div class="fix" data-lead="${l.id}"><b>${esc(l.nome)}</b><span>👀 ${vis(l).v || 0} visitas · 💬 ${vis(l).w || 0} cliques no WhatsApp</span><small>${esc(l.siteDemo.url.replace(/^https:\/\//, "").replace(/\/$/, ""))}</small></div>`).join("")}</div></section>` : ""}
       <div class="stats">
-        <div class="stat"><div class="k">Leads na base</div><div class="v">${L.length}</div><div class="d">${S.buscas.length} buscas</div></div>
-        <div class="stat"><div class="k">Com WhatsApp</div><div class="v">${L.filter((l) => l.whatsapp).length}</div><div class="d">${pctFmt(L.filter((l) => l.whatsapp).length, L.length)} da base</div></div>
-        <div class="stat destaque"><div class="k">Sem site</div><div class="v">${semSite.length}</div><div class="d">oportunidades para vender site</div></div>
-        <div class="stat"><div class="k">Retornos para hoje</div><div class="v">${pend.length}</div><div class="d">follow-ups vencidos</div></div>
+        <div class="stat anim" style="--i:3"><div class="k">Leads na base</div><div class="v" data-contar="${L.length}">${L.length}</div><div class="d">${S.buscas.length} buscas</div></div>
+        <div class="stat anim" style="--i:4"><div class="k">Com WhatsApp</div><div class="v" data-contar="${L.filter((l) => l.whatsapp).length}">${L.filter((l) => l.whatsapp).length}</div><div class="d">${pctFmt(L.filter((l) => l.whatsapp).length, L.length)} da base</div></div>
+        <div class="stat destaque anim" style="--i:5"><div class="k">Sem site</div><div class="v" data-contar="${semSite.length}">${semSite.length}</div><div class="d">oportunidades para vender site</div></div>
+        <div class="stat anim" style="--i:6"><div class="k">Sites no ar</div><div class="v" data-contar="${noAr.length}">${noAr.length}</div><div class="d">${fix.length} com visitas</div></div>
       </div>
       <div class="grid2">
-        <div class="card"><h2>Funil de vendas</h2><div class="bars">${ETAPAS.map(([e, n]) => { const q = L.filter((l) => l.etapa === e).length; return `<div class="bar"><span>${n}</span><span class="tr"><i style="width:${(q / max) * 100}%"></i></span><span class="num">${q}</span></div>`; }).join("")}</div></div>
-        <div class="card"><h2>Melhores leads sem site</h2><div class="lista">${semSite.filter((l) => l.etapa === "novo").sort((a, b) => b.score - a.score).slice(0, 6).map((l) => `<div class="it" data-lead="${l.id}" style="cursor:pointer"><span><b>${esc(l.nome)}</b><br><span class="muted">${esc(l.categoria)}</span></span>${score(l)}</div>`).join("") || '<p class="muted">Rode uma busca para ver oportunidades aqui.</p>'}</div></div>
+        <div class="card anim" style="--i:7"><h2>Funil de vendas</h2><div class="bars">${ETAPAS.map(([e, n]) => { const q = L.filter((l) => l.etapa === e).length; return `<div class="bar"><span>${n}</span><span class="tr"><i style="--w:${(q / max) * 100}%"></i></span><span class="num">${q}</span></div>`; }).join("")}</div></div>
+        <div class="card anim" style="--i:8"><h2>Sites de demonstração</h2><div class="lista">${noAr.sort((a, b) => (b.siteDemo.fixado - a.siteDemo.fixado) || (vis(b).v - vis(a).v)).slice(0, 6).map((l) => `<div class="it" data-lead="${l.id}" style="cursor:pointer"><span><b>${l.siteDemo.fixado ? "📌 " : ""}${esc(l.nome)}</b><br><span class="muted">👀 ${vis(l).v || 0} · 💬 ${vis(l).w || 0}${l.siteDemo.decidido ? "" : ` · ${diasRest(l)} dia(s) de teste`}</span></span><span class="muted">›</span></div>`).join("") || '<p class="muted">Nenhum site no ar ainda. Abra um lead e clique em <b>Criar site de demonstração</b>.</p>'}</div></div>
       </div>
-      <div class="card" style="margin-top:16px"><h2>Buscas recentes</h2><div class="lista">${S.buscas.slice(0, 5).map((b) => `<a href="#busca/${b.id}"><span><b>${esc(b.termos.join(", "))}</b><br><span class="muted">${esc(b.cidade)} · ${dataHora(b.criadoEm)}</span></span><span class="pill ${b.status}">${statusTxt(b)}</span></a>`).join("") || '<p class="muted">Nenhuma busca ainda. <a href="#nova">Faça a primeira.</a></p>'}</div></div>`];
+      <div class="card anim" style="margin-top:16px;--i:9"><h2>Buscas recentes</h2><div class="lista">${S.buscas.slice(0, 5).map((b) => `<a href="#busca/${b.id}"><span><b>${esc(b.termos.join(", "))}</b><br><span class="muted">${esc(b.cidade)} · ${dataHora(b.criadoEm)}</span></span><span class="pill ${b.status}">${statusTxt(b)}</span></a>`).join("") || '<p class="muted">Nenhuma busca ainda. <a href="#nova">Faça a primeira.</a></p>'}</div></div>`];
   },
 
   nova() {
@@ -192,7 +243,8 @@ const views = {
     const c = S.config;
     return ["Ajustes / <b>Configurações</b>", `<div class="page-h"><div><h1>Configurações</h1><p>Como suas mensagens de abordagem são escritas.</p></div></div>
       <form class="card form" id="formCfg" style="max-width:640px">
-        <label class="f">Seu nome (assina a mensagem)<input name="nome" value="${esc(c.nome)}" placeholder="Pedro"></label>
+        <div class="row2"><label class="f">Seu nome (assina a mensagem)<input name="nome" value="${esc(c.nome)}" placeholder="Pedro"></label>
+        <label class="f">Como te chamo na tela inicial<input name="apelido" value="${esc(c.apelido || "")}" placeholder="Becker"></label></div>
         <label class="f">O que você oferece<textarea name="oferta" rows="2" placeholder="Sites profissionais a partir de R$ 497, prontos em 7 dias.">${esc(c.oferta)}</textarea></label>
         <div class="row2"><label class="f">Preço (entra na resposta "quanto custa?")<input name="preco" value="${esc(c.preco || "")}" placeholder="R$ 497, em até 12x"></label>
         <label class="f">Prazo de entrega<input name="prazo" value="${esc(c.prazo || "")}" placeholder="3 dias"></label></div>
@@ -226,7 +278,11 @@ function render() {
   const foco = document.activeElement, fid = foco?.id, pos = foco?.selectionStart;
   if ((v === "nova" || v === "config") && $("#view").dataset.v === v) return; // não apaga formulário em edição
   const [crumb, html] = views[v](id);
+  const trocou = $("#view").dataset.v !== v;
   $("#crumbs").innerHTML = crumb; $("#view").innerHTML = html; $("#view").dataset.v = v;
+  if (trocou) { $("#view").classList.remove("entra"); void $("#view").offsetWidth; $("#view").classList.add("entra"); }
+  else document.querySelectorAll("#view .anim").forEach((el) => (el.style.animation = "none"));
+  if (v === "inicio") animarInicio();
   document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("ativo", a.dataset.nav === (v === "busca" ? "buscas" : v)));
   if (fid && $("#" + CSS.escape(fid))) { const el = $("#" + CSS.escape(fid)); el.focus(); try { el.setSelectionRange(pos, pos); } catch {} }
 }
@@ -259,6 +315,13 @@ document.addEventListener("click", async (e) => {
     } catch (err) { toast(err.message); }
     return;
   }
+  const sv = e.target.closest("[data-site-visitas]"), sf = e.target.closest("[data-site-fixar]");
+  if (sv || sf) {
+    const id = (sv || sf).dataset.siteVisitas || (sf || sv).dataset.siteFixar;
+    try { await api("POST", `site/${id}/${sv ? "visitas" : "fixar"}`); await atualizar(); render(); abrirLead(id); toast(sv ? "Visitas atualizadas" : "Pronto"); } catch (err) { toast(err.message); }
+    return;
+  }
+  if (e.target.closest("[data-avisos-lidos]")) { await api("POST", "avisos/lidos"); await atualizar(); render(); return; }
   const env = e.target.closest("[data-enviar]");
   if (env) { enviarAoClaude(env.dataset.enviar); return; }
   const ad = e.target.closest("[data-adiar]");
@@ -337,7 +400,12 @@ function abrirLead(id) {
   const waFonte = { site: "link no site", celular: "celular (provável)", link: "link na bio" }[l.whatsappFonte] || "";
   d.innerHTML = `<div class="d-h"><div><h2>${esc(l.nome)}</h2><p class="muted" style="margin:4px 0 0">${esc(l.categoria)}</p></div><button class="btn ghost" id="dFechar" aria-label="Fechar">✕</button></div>
     ${siteBox}
-    ${l.siteDemo?.status === "pronto" ? `<div class="alerta-site tem">Site de demonstração: <a href="${esc(l.siteDemo.url)}" target="_blank" rel="noopener">${esc(l.siteDemo.url)}</a></div>` : ""}
+    ${l.siteDemo?.status === "pronto" ? `<div class="site-box ${l.siteDemo.fixado ? "fixo" : ""}">
+      <div class="site-box-h"><b>${l.siteDemo.fixado ? "📌 " : ""}Site de demonstração</b><a href="${esc(l.siteDemo.url)}?pedro=1" target="_blank" rel="noopener">${esc(l.siteDemo.url.replace(/^https:\/\//, "").replace(/\/$/, ""))} ↗</a></div>
+      ${l.siteDemo.chave ? `<div class="site-num"><span><b>${l.siteDemo.visitas?.v || 0}</b> visitas</span><span><b>${l.siteDemo.visitas?.w || 0}</b> cliques no WhatsApp</span></div>
+      <p class="hint-s">${l.siteDemo.decidido ? (l.siteDemo.fixado ? "Fixado: este site fica no ar." : "Este site fica no ar.") : `Em teste: se ninguém visitar em ${Math.max(0, 7 - Math.floor((Date.now() - new Date(l.siteDemo.publicadoEm).getTime()) / 864e5))} dia(s), ele é apagado sozinho. Se tiver visita, fica fixado e você recebe um aviso.`}${l.siteDemo.visitas?.ultima ? ` Última visita: ${dataHora(l.siteDemo.visitas.ultima)}.` : ""}</p>
+      <div class="acoes"><button class="btn sm" data-site-visitas="${l.id}">Atualizar visitas</button><button class="btn sm ghost" data-site-fixar="${l.id}">${l.siteDemo.fixado ? "Desafixar" : "📌 Fixar"}</button></div>` : `<p class="hint-s">Site criado antes do contador de visitas: não é apagado sozinho.</p>`}
+    </div>` : l.siteDemo?.status === "removido" ? `<div class="alerta-site tem">O site de demonstração foi apagado em ${br(l.siteDemo.removidoEm)} (7 dias sem visitas). Dá para criar de novo.</div>` : ""}
     <div class="acoes"><button class="btn primary" data-criar-site="${l.id}">${l.siteDemo?.status === "pronto" ? "Refazer o site de demonstração" : "Criar site de demonstração"}</button></div>
     <dl class="info">
       <dt>Score</dt><dd>${score(l)} <span class="muted" style="font-size:12px">${esc((l.motivos || []).join(" · "))}</span></dd>
@@ -623,12 +691,12 @@ function mostrarPronto(st) {
   $("#stMeio").outerHTML = `<div class="st-pronto">
     <div class="st-check"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
     <h1 class="st-nome" style="font-size:clamp(34px,5vw,64px)">Site no ar!</h1>
-    <a class="st-link" href="${esc(st.url)}" target="_blank" rel="noopener">${esc(st.url.replace(/\/$/, ""))} ↗</a>
+    <a class="st-link" href="${esc(st.url)}?pedro=1" target="_blank" rel="noopener">${esc(st.url.replace(/\/$/, ""))} ↗</a>
     <textarea id="stMsg" rows="4" aria-label="Mensagem pronta">${esc(msg)}</textarea>
     <div class="st-acoes">
       <a class="st-wa" id="stWa" target="_blank" rel="noopener">Enviar no WhatsApp ↗</a>
       <button class="st-sec" data-st="copiar">Copiar mensagem</button>
-      <a class="st-sec" href="${esc(st.url)}" target="_blank" rel="noopener">Abrir site</a>
+      <a class="st-sec" href="${esc(st.url)}?pedro=1" target="_blank" rel="noopener">Abrir site</a>
       <button class="st-sec" data-st="fechar">Fechar</button>
     </div></div>`;
   const link = () => { $("#stWa").href = n ? `https://wa.me/${numeroWa(n)}?text=${encodeURIComponent($("#stMsg").value)}` : "#"; };

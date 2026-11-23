@@ -11,6 +11,10 @@ import * as auth from "./auth.js";
 import { gerarSite, perfil, nomeCurto, palavraMarca, slug, semAcento, RAMO_W, GENERICAS, ehRestaurante, destaquesPadrao } from "./site/gerador.js";
 import * as hostinger from "./hostinger.js";
 import { mensagensDoLead } from "./site/mensagens.js";
+import fsSync from "node:fs";
+const CONTADOR = fsSync.readFileSync(new URL("./site/contador.php", import.meta.url), "utf8");
+// conta aberturas e cliques no WhatsApp; ignora quem abriu um link com ?pedro=1 (o próprio Pedro)
+const RASTREIO = `<script>(function(){try{var q=new URLSearchParams(location.search);if(q.has("pedro"))localStorage.setItem("radar_eu","1");if(localStorage.getItem("radar_eu"))return;var h=new Date().toISOString().slice(0,10);if(localStorage.getItem("radar_v")!==h){localStorage.setItem("radar_v",h);fetch("contador.php?e=v",{keepalive:true})}document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest('a[href*="wa.me"]');if(a)fetch("contador.php?e=w",{keepalive:true})},true)}catch(e){}})();</script>`;
 
 auth.validarConfig();
 
@@ -97,7 +101,7 @@ const resumoBusca = (b) => {
     semSite: ls.filter((l) => l.siteTipo !== "proprio").length,
   };
 };
-const configPublica = () => ({ ...db.config, pastaDados: PASTA_DADOS, anthropicKey: undefined, hostingerToken: undefined, temHostinger: Boolean(db.config.hostingerToken), dominioSite: db.config.dominioSite || "pedroprendim.com", login: auth.ATIVO, temChave: Boolean(process.env.ANTHROPIC_API_KEY || db.config.anthropicKey) });
+const configPublica = () => ({ ...db.config, avisos: undefined, pastaDados: PASTA_DADOS, anthropicKey: undefined, hostingerToken: undefined, temHostinger: Boolean(db.config.hostingerToken), dominioSite: db.config.dominioSite || "pedroprendim.com", login: auth.ATIVO, temChave: Boolean(process.env.ANTHROPIC_API_KEY || db.config.anthropicKey) });
 // ---------- site de demonstração ----------
 // endereço curto: só as palavras que identificam a empresa (sem "clínica", "estética", "de"...)
 function subPadrao(lead) {
@@ -150,9 +154,14 @@ async function publicarDemo(lead, sub, respostas, imagens) {
   salvar();
   try {
     const { html } = gerarSite(lead, r);
-    const arquivos = [{ caminho: "index.html", dados: Buffer.from(html) }, ...decodificarImagens(imagens).map(({ caminho, dados }) => ({ caminho, dados }))];
+    const chave = lead.siteDemo.chave = crypto.randomBytes(12).toString("hex");
+    const arquivos = [
+      { caminho: "index.html", dados: Buffer.from(html.replace("</body>", RASTREIO + "\n</body>")) },
+      { caminho: "contador.php", dados: Buffer.from(CONTADOR.replace("__CHAVE__", chave)) },
+      ...decodificarImagens(imagens).map(({ caminho, dados }) => ({ caminho, dados })),
+    ];
     const url = await hostinger.publicarSite(cfgHost(), sub, arquivos, (etapa) => { lead.siteDemo.etapa = etapa; });
-    Object.assign(lead.siteDemo, { status: "pronto", etapa: "pronto", url, publicadoEm: new Date().toISOString() });
+    Object.assign(lead.siteDemo, { status: "pronto", etapa: "pronto", url, publicadoEm: new Date().toISOString(), visitas: { v: 0, w: 0 }, fixado: false, decidido: false });
   } catch (e) {
     console.error("[site]", e);
     Object.assign(lead.siteDemo, { status: "erro", erro: e.message });
@@ -160,6 +169,47 @@ async function publicarDemo(lead, sub, respostas, imagens) {
     publicando.delete(lead.id); salvarAgora();
   }
 }
+// ---------- sites de demonstração: visitas e limpeza depois de 7 dias ----------
+const DIAS_TESTE = 7;
+function avisar(tipo, lead, texto) {
+  const avisos = db.config.avisos || (db.config.avisos = []);
+  avisos.unshift({ id: crypto.randomUUID().slice(0, 10), tipo, leadId: lead.id, nome: lead.nome, texto, em: new Date().toISOString(), lido: false });
+  db.config.avisos = avisos.slice(0, 50);
+}
+async function atualizarVisitas(lead) {
+  const s = lead.siteDemo;
+  if (s?.status !== "pronto" || !s.chave) return null;
+  try { s.visitas = await hostinger.lerVisitas(s.url, s.chave); s.visitasEm = new Date().toISOString(); }
+  catch (e) { s.visitasErro = e.message; }
+  return s.visitas;
+}
+let verificando = false;
+async function verificarSites() {
+  if (verificando || !db.config.hostingerToken) return;
+  verificando = true;
+  try {
+    for (const lead of Object.values(db.leads)) {
+      const s = lead.siteDemo;
+      if (s?.status !== "pronto" || !s.chave) continue; // sites antigos, sem contador, ficam como estão
+      const v = await atualizarVisitas(lead);
+      if (s.decidido || !v || s.visitasErro && !s.visitasEm) continue;
+      const idade = (Date.now() - new Date(s.publicadoEm).getTime()) / 864e5;
+      if (idade < DIAS_TESTE) continue;
+      if ((v.v || 0) + (v.w || 0) > 0) {
+        Object.assign(s, { fixado: true, decidido: true });
+        avisar("visitas", lead, `O site de ${lead.nome} teve ${v.v || 0} visita(s)${v.w ? ` e ${v.w} clique(s) no WhatsApp` : ""}. Ficou fixado: vale chamar de novo!`);
+      } else {
+        try {
+          await hostinger.removerSite(cfgHost(), s.sub);
+          Object.assign(s, { status: "removido", decidido: true, removidoEm: new Date().toISOString() });
+          avisar("removido", lead, `O site de ${lead.nome} ficou ${DIAS_TESTE} dias sem visitas e foi apagado.`);
+        } catch (e) { console.error("[limpeza]", e.message); }
+      }
+    }
+  } finally { verificando = false; salvarAgora(); }
+}
+setInterval(verificarSites, 3 * 3600e3).unref();
+
 const csvCampo = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
 // ---------- rotas ----------
@@ -171,7 +221,7 @@ async function api(req, res, url) {
     return json(res, 200, {
       leads: Object.values(db.leads),
       buscas: Object.values(db.buscas).map(resumoBusca).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)),
-      config: configPublica(), hoje: hoje(),
+      config: configPublica(), hoje: hoje(), avisos: (db.config.avisos || []).slice(0, 20),
     });
   }
 
@@ -231,7 +281,7 @@ async function api(req, res, url) {
     if (m === "GET") return json(res, 200, configPublica());
     if (m === "PUT") {
       const b = await corpo(req);
-      for (const k of ["nome", "oferta", "preco", "prazo", "portfolio", "instagram"]) if (k in b) db.config[k] = String(b[k]).slice(0, 500);
+      for (const k of ["nome", "oferta", "preco", "prazo", "portfolio", "instagram", "apelido"]) if (k in b) db.config[k] = String(b[k]).slice(0, 500);
       if ("diasFollowup" in b) db.config.diasFollowup = Math.min(60, Math.max(1, Number(b.diasFollowup) || 3));
       if (b.anthropicKey) db.config.anthropicKey = String(b.anthropicKey).trim();
       if (b.removerChave) db.config.anthropicKey = "";
@@ -241,6 +291,14 @@ async function api(req, res, url) {
       salvarAgora(); return json(res, 200, configPublica());
     }
   }
+
+  if (recurso === "avisos") {
+    const avisos = db.config.avisos || [];
+    if (m === "POST" && id === "lidos") { avisos.forEach((a) => (a.lido = true)); salvar(); return json(res, 200, { ok: true }); }
+    if (m === "POST" && id && acao === "lido") { const a = avisos.find((x) => x.id === id); if (a) a.lido = true; salvar(); return json(res, 200, { ok: true }); }
+  }
+
+  if (recurso === "sites" && id === "verificar" && m === "POST") { await verificarSites(); return json(res, 200, { ok: true }); }
 
   if (recurso === "backup" && m === "GET") {
     salvarAgora();
@@ -276,6 +334,8 @@ async function api(req, res, url) {
       publicarDemo(lead, sub, b.respostas || {}, b.imagens || []);
       return json(res, 202, lead.siteDemo);
     }
+    if (acao === "visitas" && m === "POST") { await atualizarVisitas(lead); salvar(); return json(res, 200, lead.siteDemo || null); }
+    if (acao === "fixar" && m === "POST") { if (lead.siteDemo) { lead.siteDemo.fixado = !lead.siteDemo.fixado; lead.siteDemo.decidido = true; salvar(); } return json(res, 200, lead.siteDemo || null); }
     if (!acao && m === "GET") return json(res, 200, lead.siteDemo || null);
   }
 
@@ -373,8 +433,13 @@ const server = http.createServer(async (req, res) => {
 });
 
 // sem senha: só o próprio computador acessa. Com RADAR_SENHA: aceita acesso de fora, com login.
+server.on("error", (e) => {
+  if (e.code === "EADDRINUSE") { console.log(`\n  O Radar de Leads já está rodando em http://localhost:${PORT}\n`); process.exit(0); }
+  throw e;
+});
 server.listen(PORT, auth.ATIVO ? "0.0.0.0" : "127.0.0.1", () => {
   console.log(`\n  Radar de Leads rodando em http://localhost:${PORT}${auth.ATIVO ? " (acesso externo com senha)" : ""}\n`);
   processarFila();
+  setTimeout(verificarSites, 20000);
 });
 process.on("SIGINT", () => { salvarAgora(); process.exit(0); });
