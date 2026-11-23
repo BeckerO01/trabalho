@@ -112,6 +112,8 @@ textarea { resize: vertical; }
 .msg textarea { font-size: 14px; line-height: 1.5; }
 .hint-s { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
 #pDlg { width: min(920px, calc(100vw - 24px)); }
+#gDlg { width: min(1200px, calc(100vw - 24px)); }
+#gFrame { width: 100%; height: min(70dvh, 760px); border: 1px solid var(--line); border-radius: var(--r); background: #fff; }
 #pTxt { font: 500 12.5px/1.6 var(--f-mono); height: min(58dvh, 620px); white-space: pre-wrap; }
 .chk { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--muted); }
 .chk input { width: auto; margin-top: 3px; }
@@ -317,6 +319,7 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
       <button class="btn" id="mGerar">✨ Responder com IA</button>
       <button class="btn" id="mCopiar">Copiar</button>
       <button class="btn" id="mPrompt">Prompt do site</button>
+      <button class="btn" id="mSite">Gerar site</button>
       <a class="btn wa" id="mWhats" target="_blank" rel="noopener">Abrir no WhatsApp ↗</a>
     </div>
     <div class="actions">
@@ -334,10 +337,23 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
       <button class="btn primary" id="pCopiar">Copiar prompt</button>
       <button class="btn" id="pBaixar">Baixar .md</button>
       <button class="btn" id="pIA">✨ Aprofundar com IA</button>
+      <button class="btn primary" id="pGerar">Gerar site pronto</button>
     </div>
     <label class="chk"><input type="checkbox" id="pBase" checked> Incluir o código-base do site de referência (recomendado: é o que garante o nível de motion)</label>
     <div class="status" id="pStatus" role="status"></div>
     <textarea id="pTxt" readonly aria-label="Prompt do site"></textarea>
+  </div>
+</dialog>
+
+<dialog id="gDlg">
+  <div class="m">
+    <div class="m-h"><div><h3 id="gNome"></h3><p id="gMeta" class="hint-s"></p></div><button class="btn ghost" id="gFechar" aria-label="Fechar">✕</button></div>
+    <div class="actions">
+      <button class="btn primary" id="gBaixar">Baixar site (.html)</button>
+      <button class="btn" id="gCopiar">Copiar HTML</button>
+    </div>
+    <p class="hint-s">Prévia abaixo. Gerado sem usar o Claude. O mapa do Google só aparece no site publicado.</p>
+    <iframe id="gFrame" title="Prévia do site" sandbox="allow-scripts allow-popups"></iframe>
   </div>
 </dialog>
 
@@ -1221,9 +1237,13 @@ const VIVO = {
   generico: { a: "Atendimento", w: ["rápido", "próximo", "de confiança", "sem enrolação"], b: "de verdade.", mq: ["resposta rápida", "serviço bem feito", "contato fácil"] },
 };
 const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; };
+const RAMO_W = /^(oficina|mecanica|auto|center|centro|barbearia|barber|shop|pet|petshop|restaurante|pizzaria|hamburgueria|lanchonete|padaria|confeitaria|academia|studio|clinica|consultorio|escritorio|loja|salao|espaco|instituto|odontologia|odonto|estetica|advocacia|advogados|contabilidade|imobiliaria|escola|cursos?|bar|cafe|cafeteria|lavacar|lava|jato|funilaria|eletrica|materiais|construcao|veterinaria|veterinario|farmacia|otica|moda|beleza|saude|bem|estar|e|de|da|do|das|dos|em|the|and)$/;
 function palavraMarca(l) {
-  const ws = nomeCurto(l).split(/\s+/).filter((w) => w.length > 2 && !GENERICAS.test(semAcento(w)) && /^[\p{L}]+$/u.test(w));
-  return (ws[0] || nomeCurto(l).split(/\s+/)[0] || "marca").toLowerCase();
+  const ramo = new Set(semAcento(`${l.categoria || ""} ${perfil(l).termo}`).split(/[^a-z]+/));
+  const ws = nomeCurto(l).split(/\s+/).filter((w) => /^[\p{L}'&]+$/u.test(w) && !RAMO_W.test(semAcento(w)) && !GENERICAS.test(semAcento(w)) && !ramo.has(semAcento(w)));
+  if (!ws.length) return (nomeCurto(l).split(/\s+/).pop() || "marca").toLowerCase();
+  const m = ws[0].length <= 4 && ws[1] ? ws[0] + " " + ws[1] : ws[0];
+  return m.toLowerCase().slice(0, 18);
 }
 
 let pBase = true;
@@ -1479,6 +1499,203 @@ $("#pIA").addEventListener("click", async () => {
   } catch (e) { st.textContent = erroIA(e?.code); st.classList.add("err"); }
   finally { btn.disabled = false; }
 });
+
+// ================= GERADOR DE SITE (sem IA: molde do site de referência + dados do lead) =================
+const hexRgb = (h) => { const n = parseInt(h.replace("#", ""), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+const rgbHex = (r) => "#" + r.map((x) => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, "0")).join("");
+const mix = (a, b, t) => rgbHex(hexRgb(a).map((x, i) => x + (hexRgb(b)[i] - x) * t));
+const vec3 = (h) => "vec3(" + hexRgb(h).map((x) => (x / 255).toFixed(3)).join(",") + ")";
+const rgbStr = (h) => hexRgb(h).join(",");
+const fam = (f) => String(f).replace(/\s*\(.*$/, "").trim();
+const slug = (l) => semAcento(nomeCurto(l)).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "site";
+const H = (s) => esc(s);
+
+function gerarSite(l) {
+  const p = perfil(l), v = VIVO[p.id] || VIVO.generico, ia = l.siteIA || null, o = ondeFica(l);
+  const emp = nomeCurto(l), marca = palavraMarca(l), cidade = o.cidade || "sua cidade", ramo = rotulo(l) || p.termo;
+  const onde = o.bairro ? `${o.bairro}, ${cidade}` : cidade;
+  const wa = numeroWhats(l.whatsapp || l.telefone);
+  const waL = (msg) => wa ? `https://wa.me/${wa}?text=${encodeURIComponent(msg)}` : "#contato";
+  const temNota = l.nota && l.avaliacoes >= 5, nota = l.nota ? String(l.nota).replace(".", ",") : "";
+  const [, claro, ink, muted, primary, accent] = p.paleta;
+  const acc = lum(primary) < 0.12 ? accent : primary, acc2 = acc === primary ? accent : primary;
+  const bg = mix(claro, "#ffffff", 0.35), soft = mix(acc, bg, 0.78), accLight = mix(acc, "#ffffff", 0.38);
+  const tFont = fam(p.fontes[0]), bFont = fam(p.fontes[1]);
+  const cta = p.cta, ctaMsg = p.waMsg;
+  const servs = (ia?.servicos?.length ? ia.servicos.map((s) => [s.nome, s.descricao]) : p.servicos.map((s) => [s, null])).slice(0, 6);
+  const genS = ["Do jeito certo, do começo ao fim.", "Com atenção de verdade em cada detalhe.", "Feito por quem entende do assunto.", "Caprichado, do jeito que foi combinado.", "Tire suas dúvidas direto no WhatsApp.", "Sem complicação para você."];
+  while (servs.length < 6) servs.push(["Atendimento pelo WhatsApp", null]);
+  const difs = (ia?.diferenciais?.length ? ia.diferenciais.map((d) => [d.titulo, d.texto]) : p.difs.map((d) => [d, null])).slice(0, 4);
+  const genD = ["É assim desde o primeiro contato.", "Porque confiança se constrói nos detalhes.", "Para você ficar tranquilo do começo ao fim.", "Do jeito que a gente gostaria de ser atendido."];
+  while (difs.length < 4) difs.push(["Atendimento próximo", null]);
+  const sobre = ia?.sobre ? H(ia.sobre).replace(/\[CONFIRMAR[^\]]*\]/g, "")
+    : `Somos ${H(emp)}, ${H(ramo.toLowerCase())} ${o.bairro ? "no bairro " + H(o.bairro) : "em " + H(cidade)}. A gente acredita em <em>${H(v.mq[0])}</em> e em ${H(v.mq[1])}. Aqui você encontra ${H(p.promessa)}, do jeito que faz cada cliente <em>voltar</em>.`;
+  let s = BASE_REF, faltou = [];
+  const R = (de, para, todas) => { if (!s.includes(de)) { faltou.push(de.slice(0, 50)); return; } s = todas ? s.split(de).join(para) : s.replace(de, () => para); };
+
+  // ---- cabeçalho, cores, fontes ----
+  R("<title>Aurora — Clínica Integrada</title>", `<title>${H(emp)} | ${H(ramo)} em ${H(cidade)}</title>\n<meta name="robots" content="noindex">`);
+  R('content="Clínica Aurora — saúde que se move com você."', `content="${H(emp)}: ${H(p.promessa)}. ${H(onde)}. ${H(cta)} pelo WhatsApp."`);
+  R("family=Instrument+Serif:ital@0;1&family=Manrope:wght@300;400;500;600", `family=${encodeURIComponent(tFont).replace(/%20/g, "+")}&family=${encodeURIComponent(bFont).replace(/%20/g, "+")}:wght@400;500;600`);
+  R("--bg:#f3f7f7; --ink:#0a2a33; --mute:#5c737a; --acc:#0e9c96; --sage:#cfe5e3;", `--bg:${bg}; --ink:${ink}; --mute:${muted}; --acc:${acc}; --sage:${soft};`);
+  R('--serif:"Instrument Serif","Cormorant Garamond",Georgia,serif;', `--serif:"${tFont}",Georgia,serif;`);
+  R('--sans:"Manrope",system-ui', `--sans:"${bFont}",system-ui`);
+  R("rgba(243,247,247,", `rgba(${rgbStr(bg)},`, true);
+  R("rgba(10,42,51,", `rgba(${rgbStr(ink)},`, true);
+  R(".w{display:inline-block;overflow:hidden;vertical-align:top;padding:0 .07em .16em;margin:0 -.07em -.16em}", ".w{display:inline-block;overflow:hidden;vertical-align:top;padding:.18em .07em .16em;margin:-.18em -.07em -.16em}");
+  R(".hs,.works,.contact{--acc:#58d2c4}", `.hs,.works,.contact{--acc:${accLight}}`);
+  R(".card{--acc:#0e9c96}", `.card{--acc:${acc}}`);
+  R("#2bb3aa 0,#a8dcd8 60%", `${acc} 0,${mix(acc, bg, 0.6)} 60%`);
+  R("#dff1f2,#a9d9dd 55%", `${mix(soft, "#ffffff", 0.5)},${mix(acc, bg, 0.55)} 55%`);
+  R("vec3 bone=vec3(.953,.969,.969),sage=vec3(.72,.88,.87),peach=vec3(.7,.85,.94),lil=vec3(.86,.91,.98);",
+    `vec3 bone=${vec3(bg)},sage=${vec3(mix(acc, bg, 0.7))},peach=${vec3(mix(acc2, bg, 0.6))},lil=${vec3(mix(acc, bg, 0.85))};`);
+  R("col=mix(col,vec3(.45,.82,.8),.38", `col=mix(col,${vec3(mix(acc, "#ffffff", 0.3))},.38`);
+  R("vec3 oc=mix(vec3(.03,.5,.52),vec3(.6,.9,.87)", `vec3 oc=mix(${vec3(mix(acc, "#000000", 0.25))},${vec3(mix(acc, "#ffffff", 0.55))}`);
+  R("oc=mix(oc,vec3(.26,.56,.86)", `oc=mix(oc,${vec3(acc2)}`);
+  R("oc=oc*(.6+.52*df)+sp*.75+fr*vec3(.93,1.,1.)*.7;", `oc=oc*(.6+.52*df)+sp*.75+fr*${vec3(mix(bg, "#ffffff", 0.5))}*.7;`);
+  const gfs = Math.min(29, Math.round((29 * 6) / Math.max(marca.length, 6)));
+  R("font-size:clamp(5rem,29vw,34rem)", `font-size:clamp(3rem,${gfs}vw,34rem)`);
+
+  // ---- preloader, navegação ----
+  R("<span>Aurora — respirando</span>", `<span>${H(emp)} · carregando</span>`);
+  R('aurora<sup>®</sup>', H(marca));
+  R('<span>Quem somos</span><span>Quem somos</span>', "<span>Sobre</span><span>Sobre</span>");
+  R('<span>Especialidades</span><span>Especialidades</span>', "<span>Serviços</span><span>Serviços</span>");
+  R('<span>Trabalhos</span><span>Trabalhos</span>', "<span>Por que a gente</span><span>Por que a gente</span>");
+  R('<a href="#contato" class="pill magnet">Agendar →</a>', `<a href="${waL(ctaMsg)}" target="_blank" rel="noopener" class="pill magnet">${H(cta)} →</a>`);
+
+  // ---- hero ----
+  R('<div class="chip c1" data-depth="22"><div><i class="dot"></i>Aberto agora <span>· até 21h</span></div></div>',
+    `<div class="chip c1" data-depth="22"><div><i class="dot"></i>Atendimento <span>· pelo WhatsApp</span></div></div>`);
+  R('<div class="chip c2" data-depth="-34"><div><b>4,9</b><span>★★★★★<br>1.284 avaliações</span></div></div>',
+    temNota ? `<div class="chip c2" data-depth="-34"><div><b>${nota}</b><span>★★★★★<br>${Number(l.avaliacoes).toLocaleString("pt-BR")} avaliações no Google</span></div></div>`
+      : `<div class="chip c2" data-depth="-34"><div><span>${H(ramo)}<br>${H(cidade)}</span></div></div>`);
+  R('<a href="#contato" class="badge magnet" data-cursor="agendar" aria-label="Agendar consulta">',
+    `<a href="${waL(ctaMsg)}" target="_blank" rel="noopener" class="badge magnet" data-cursor="${H(cta.split(" ")[0].toLowerCase())}" aria-label="${H(cta)}">`);
+  R("agende sua consulta ✳ agende sua consulta ✳ ", `${H(cta.toLowerCase())} ✳ ${H(cta.toLowerCase())} ✳ `);
+  R('<span class="row" data-split>Saúde que</span>', `<span class="row" data-split>${H(v.a)}</span>`);
+  R("<i>respira</i><i>escuta</i><i>acolhe</i><i>se move</i>", v.w.map((w) => `<i>${H(w)}</i>`).join(""));
+  R('<span class="row" data-split>com você.</span>', `<span class="row" data-split>${H(v.b)}</span>`);
+  R('<div class="chip c3" data-depth="16"><div><span>Próximo horário</span><b>hoje, 16:40</b></div></div>',
+    `<div class="chip c3" data-depth="16"><div><span>Onde estamos</span><b>${H(o.bairro || cidade)}</b></div></div>`);
+  R("Texto de exemplo só para ocupar o espaço: uma clínica integrada onde ciência, calma e um bom café convivem no mesmo corredor.",
+    H(ia?.subheadline || `${p.promessa.charAt(0).toUpperCase() + p.promessa.slice(1)}. ${o.bairro ? "No bairro " + o.bairro + ", " + cidade : "Em " + cidade}.`));
+  R('<a href="#contato" class="send ink magnet"><span>Agendar consulta</span><i>→</i></a><a href="#servicos" class="link">Ver especialidades</a>',
+    `<a href="${waL(ctaMsg)}" target="_blank" rel="noopener" class="send ink magnet" data-evento="whatsapp_hero"><span>${H(cta)}</span><i>→</i></a><a href="#servicos" class="link">Ver serviços</a>`);
+
+  // ---- marquee ----
+  R("<span>cuidado sem pressa</span><span>ciência com afeto</span><span>corpo em movimento</span><span>mente em silêncio</span>",
+    [...new Set(v.mq.concat([p.promessa.split(",")[0]]).map((x) => x.toLowerCase()))].map((x) => `<span>${H(x)}</span>`).join(""));
+  R("<span>clínica geral</span><span>dermatologia</span><span>fisioterapia</span><span>nutrição</span><span>psicologia</span>",
+    servs.slice(0, 5).map(([n]) => `<span>${H(n.toLowerCase())}</span>`).join(""));
+
+  // ---- sobre e números ----
+  R(s.slice(s.indexOf('<p class="scrub" id="scrub">'), s.indexOf("</p>", s.indexOf('<p class="scrub" id="scrub">')) + 4), `<p class="scrub" id="scrub">${sobre}</p>`);
+  const stats = [];
+  if (temNota) stats.push([String(l.nota).replace(".", ","), "nota no Google", null], [l.avaliacoes, "avaliações no Google", l.avaliacoes]);
+  const ini = s.indexOf('<div class="stats">'), fim = s.indexOf("</div>\n\n<!-- COM O QUE TRABALHAMOS -->");
+  if (ini > 0 && fim > ini) s = s.slice(0, ini) + (stats.length ? `<div class="stats" style="grid-template-columns:repeat(${stats.length},1fr)">\n${stats.map(([t, r, c]) => `  <div class="stat"><b${c ? ` data-count="${c}"` : ""}>${c ? 0 : H(t)}</b><span>${H(r)}</span></div>`).join("\n")}\n` : `<div class="stats" hidden>\n`) + s.slice(fim);
+  else faltou.push("stats");
+
+  // ---- serviços (rolagem horizontal) ----
+  const svgs = [...BASE_REF.matchAll(/<svg viewBox="0 0 100 100"[^>]*>[\s\S]*?<\/svg>/g)].map((m) => m[0]).filter((x) => !x.includes("textPath")).slice(0, 6);
+  const tIni = s.indexOf('<div class="track" id="track">'), tFim = s.indexOf('<div class="hs-bar">');
+  const jeito = p.id === "restaurante" ? "matar a sua <em>fome</em>" : p.id === "oficina" ? "cuidar do seu <em>carro</em>" : p.id === "pet" ? "cuidar do seu <em>pet</em>" : ["contabilidade", "advocacia", "obras"].includes(p.id) ? "resolver para <em>você</em>" : "cuidar de <em>você</em>";
+  if (tIni > 0 && tFim > tIni) s = s.slice(0, tIni) + `<div class="track" id="track">
+      <div class="panel intro">
+        <div class="eyebrow" style="color:rgba(${rgbStr(bg)},.6)">O que a gente faz</div>
+        <h2>Seis jeitos de ${jeito}.</h2>
+        <p>Continue rolando: a página anda de lado. Toque em um serviço para chamar no WhatsApp.</p>
+      </div>
+${servs.map(([n, d], i) => `      <article class="panel" data-cursor="chamar" data-wa="${H(waL(`Olá! Vim pelo site e quero saber sobre ${n}.`))}" role="link" tabindex="0">
+        <span class="num">0${i + 1}</span>
+        ${svgs[i] || ""}
+        <div><h3>${H(n)}</h3><p>${H(d || genS[i])}</p><div class="tags"><i>whatsapp</i><i>${H((o.bairro || cidade).toLowerCase())}</i></div></div>
+      </article>`).join("\n")}
+    </div>
+    ` + s.slice(tFim);
+  else faltou.push("track");
+
+  // ---- por que a gente (cartões) ----
+  R('<div><div class="eyebrow">Nossos trabalhos feitos</div><h2 data-split>Histórias que <em>deram certo.</em></h2></div>',
+    `<div><div class="eyebrow">Por que ${H(emp)}</div><h2 data-split>Motivos para <em>${p.id === "restaurante" ? "voltar sempre." : "confiar."}</em></h2></div>`);
+  R('<p class="fade">Casos inventados para preencher o layout. Passe o mouse — os cartões têm vida própria.</p>',
+    `<p class="fade">${H(p.promessa.charAt(0).toUpperCase() + p.promessa.slice(1))}. Role para ver.</p>`);
+  const cores = [
+    `--i:0;--c1:${soft};--c2:${mix(soft, "#ffffff", 0.6)};--o1:${acc};--o2:${acc2}`,
+    `--i:1;--c1:${mix(acc2, bg, 0.75)};--c2:${mix(acc2, "#ffffff", 0.85)};--o1:${acc2};--o2:${mix(acc, "#ffffff", 0.3)}`,
+    `--i:2;--c1:${mix(ink, acc, 0.18)};--ct:${bg};--c2:${mix(ink, "#000000", 0.25)};--o1:${accLight};--o2:${acc2};--cn:${bg};--bm:normal`,
+    `--i:3;--c1:${mix(acc2, bg, 0.82)};--c2:${bg};--o1:${acc};--o2:${mix(acc2, "#ffffff", 0.3)}`];
+  const cIni = s.indexOf('  <article class="card"'), cFim = s.indexOf("</section>", cIni);
+  if (cIni > 0) s = s.slice(0, cIni) + difs.map(([t, d], i) => `  <article class="card" style="${cores[i]}" data-cursor="chamar">
+    <div class="card-in">
+      <div class="card-info"><small>Motivo ${i + 1} de 4</small><div><h3>${H(t)}</h3><p>${H(d || genD[i])}</p></div><dl><div><dt>0${i + 1}</dt><dd>de 04</dd></div><div><dt>${H((o.bairro || cidade).split(" ")[0])}</dt><dd>${H(cidade)}</dd></div></dl></div>
+      <div class="art"><u></u><u></u><b>0${i + 1}</b><span>${H(emp)}</span></div>
+    </div>
+  </article>`).join("\n") + "\n" + s.slice(cFim);
+  else faltou.push("cards");
+
+  // ---- contato ----
+  R('<div class="field"><input id="f2" type="tel" placeholder=" " required autocomplete="tel"><label for="f2">WhatsApp</label></div>', "");
+  R('<span id="sendtxt">Quero agendar</span>', `<span id="sendtxt">${H(cta)}</span>`);
+  const info = [["Endereço", H(l.endereco || onde)], ["Atendimento", "Pelo WhatsApp<br>Horários sob consulta"]];
+  if (l.telefone) info.push(["Telefone", `<a href="tel:+${numeroWhats(l.telefone)}">${H(telBR(l.telefone))}</a>`]);
+  if (l.email) info.push(["E-mail", `<a href="mailto:${H(l.email)}">${H(l.email)}</a>`]);
+  else if (l.instagram) info.push(["Instagram", `<a href="https://instagram.com/${H(l.instagram.replace("@", ""))}" target="_blank" rel="noopener">${H(l.instagram)}</a>`]);
+  const iIni = s.indexOf('<div class="info fade">'), iFim = s.indexOf("</div>\n    </div>\n    <div class=\"map-wrap\">");
+  if (iIni > 0 && iFim > iIni) s = s.slice(0, iIni) + `<div class="info fade">\n${info.map(([k, val]) => `        <div><small>${k}</small>${val}</div>`).join("\n")}\n      ` + s.slice(iFim);
+  else faltou.push("info");
+  R('title="Mapa — Clínica Aurora"', `title="Mapa — ${H(emp)}"`);
+  R("https://www.google.com/maps?q=Avenida+Paulista+1000+S%C3%A3o+Paulo&z=15&output=embed", `https://www.google.com/maps?q=${encodeURIComponent(l.endereco || l.nome + " " + cidade)}&z=15&output=embed`);
+  R('<span class="map-tag">−23.5647, −46.6527</span>', `<span class="map-tag">${H(onde)}</span>`);
+
+  // ---- rodapé ----
+  R("<p>Um lugar calmo no meio da avenida mais barulhenta da cidade.</p>", `<p>${H(p.promessa.charAt(0).toUpperCase() + p.promessa.slice(1))}.</p>`);
+  R('<a href="#sobre">Quem somos</a><a href="#servicos">Especialidades</a><a href="#trabalhos">Trabalhos</a>', '<a href="#sobre">Sobre</a><a href="#servicos">Serviços</a><a href="#trabalhos">Por que a gente</a>');
+  R('<a href="#">Instagram</a><a href="#">LinkedIn</a><a href="#">YouTube</a>',
+    (l.instagram ? `<a href="https://instagram.com/${H(l.instagram.replace("@", ""))}" target="_blank" rel="noopener">Instagram</a>` : "") + (wa ? `<a href="${waL(ctaMsg)}" target="_blank" rel="noopener">WhatsApp</a>` : "") + (l.mapsUrl ? `<a href="${H(l.mapsUrl)}" target="_blank" rel="noopener">Google Maps</a>` : ""));
+  R("<small>Agora em São Paulo</small>", `<small>Agora em ${H(cidade)}</small>`);
+  R('aria-label="aurora"', `aria-label="${H(marca)}"`);
+  R("'aurora'.split('')", `${JSON.stringify(marca)}.split('')`);
+  R("© 2026 Clínica Aurora · site demonstrativo, textos fictícios", `© ${new Date().getFullYear()} ${H(l.nome)}`);
+
+  // ---- comportamento: formulário e serviços abrem o WhatsApp; botão flutuante ----
+  R("e.preventDefault(); $('#sendtxt').textContent = 'Recebido — já te chamamos ✓'; e.target.reset();",
+    `e.preventDefault(); const nome = $('#f1').value.trim(), msg = $('#f3').value.trim();
+  window.open(${JSON.stringify(wa ? "https://wa.me/" + wa + "?text=" : "#")} + encodeURIComponent('Olá! Sou ' + nome + '. ' + msg + ' (vim pelo site)'), '_blank', 'noopener');`);
+  R("$('#top').addEventListener", `$$('[data-wa]').forEach(el => { const go = () => window.open(el.dataset.wa, '_blank', 'noopener'); el.addEventListener('click', go); el.addEventListener('keydown', e => e.key === 'Enter' && go()); });
+$('#top').addEventListener`);
+  R("@media (prefers-reduced-motion:reduce){", `.wa-float{position:fixed;right:20px;bottom:20px;z-index:85;width:58px;height:58px;border-radius:50%;background:#25D366;display:grid;place-items:center;box-shadow:0 12px 30px -10px rgba(0,0,0,.45);transform:scale(.6);opacity:0;transition:transform .3s var(--ease),opacity .3s}
+body:not(.loading) .wa-float{transform:none;opacity:1;transition-delay:1.8s}
+.wa-float svg{width:30px;height:30px;fill:#fff}
+@media (prefers-reduced-motion:reduce){`);
+  R("</body>", `${wa ? `<a class="wa-float magnet" href="${waL(ctaMsg)}" target="_blank" rel="noopener" aria-label="Chamar no WhatsApp" data-evento="whatsapp_flutuante"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-3.3-.8-2.8-1.1-4.5-3.9-4.7-4.1-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.6-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.6-.1l.9-1c.2-.3.4-.2.6-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.3Z"/></svg></a>\n` : ""}</body>`);
+  if (faltou.length) console.warn("gerarSite: trechos do molde não encontrados", faltou);
+  return { html: s, faltou, arquivo: slug(l) };
+}
+
+let gAtual = null;
+function abrirGerado(id) {
+  const l = leads[id]; if (!l) return;
+  const r = gerarSite(l); gAtual = { id, ...r };
+  $("#gNome").textContent = "Site pronto · " + nomeCurto(l);
+  $("#gMeta").textContent = `${(r.html.length / 1024).toFixed(0)} KB · pasta sugerida na hospedagem: /${r.arquivo}/index.html${l.siteIA ? " · com textos sob medida da IA" : " · textos do perfil do ramo (use \"Aprofundar com IA\" no prompt para textos sob medida)"}`;
+  $("#gFrame").srcdoc = r.html;
+  if (!$("#gDlg").open) $("#gDlg").showModal();
+}
+$("#gFechar").addEventListener("click", () => { $("#gDlg").close(); $("#gFrame").srcdoc = ""; });
+$("#gBaixar").addEventListener("click", async () => {
+  if (!gAtual) return;
+  const dl = window.claude?.use ? await claude.use("downloads") : null;
+  if (!dl) { toast("Download indisponível aqui. Use Copiar HTML."); return; }
+  try { await dl.save({ filename: `${gAtual.arquivo}.html`, data: gAtual.html }); } catch {}
+});
+$("#gCopiar").addEventListener("click", async () => {
+  if (!gAtual) return;
+  try { await navigator.clipboard.writeText(gAtual.html); toast("HTML copiado"); } catch { toast("Não foi possível copiar. Use Baixar."); }
+});
+$("#pGerar").addEventListener("click", () => { if (pAtual) abrirGerado(pAtual); });
+$("#mSite").addEventListener("click", () => { if (atual) abrirGerado(atual.id); });
 
 // ---------------- configurações ----------------
 function preencherCfg() { $("#cfgNome").value = cfg.nome || ""; $("#cfgOferta").value = cfg.oferta || ""; $("#cfgDias").value = cfg.dias || 3; $("#cfgPreco").value = cfg.preco || ""; $("#cfgRefs").value = cfg.refs || ""; $("#cfgEstilo").value = cfg.estilo || ""; }
