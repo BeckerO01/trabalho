@@ -8,7 +8,7 @@ import { rodarBusca, TAMANHOS } from "./scraper.js";
 import { pontuar, temperatura } from "./scoring.js";
 import { mensagemIA, mensagemPronta } from "./ia.js";
 import * as auth from "./auth.js";
-import { gerarSite, perfil, nomeCurto, palavraMarca, slug, semAcento, RAMO_W, GENERICAS } from "./site/gerador.js";
+import { gerarSite, perfil, nomeCurto, palavraMarca, slug, semAcento, RAMO_W, GENERICAS, ehRestaurante, destaquesPadrao } from "./site/gerador.js";
 import * as hostinger from "./hostinger.js";
 import { mensagensDoLead } from "./site/mensagens.js";
 
@@ -113,7 +113,7 @@ function padraoSite(lead) {
     sub: lead.siteDemo?.sub || subPadrao(lead),
     nome: ant.nome || nomeCurto(lead), marca: ant.marca || palavraMarca(lead),
     whatsapp: ant.whatsapp || lead.whatsapp || lead.telefone || "",
-    servicos: ant.servicos || p.servicos.slice(0, 6),
+    servicos: ant.servicos || (ehRestaurante(lead) ? destaquesPadrao(lead) : p.servicos.slice(0, 6)),
     horario: ant.horario || "", sobre: ant.sobre || "",
     cor: ant.cor || "", corPadrao: (() => { const [, , , , pr, ac] = p.paleta; const l = (h) => { const n = parseInt(h.slice(1), 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; }; return l(pr) < 0.12 ? ac : pr; })(),
     ramo: p.termo, publicado: lead.siteDemo?.status === "pronto" ? lead.siteDemo.url : "",

@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
+import { ehRestaurante, renderRestaurante, destaquesPadrao } from "./modelos/restaurante.js";
 const BASE_REF = fs.readFileSync(path.join(AQUI, "molde-aurora.html"), "utf8");
 const cfg = {};
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -303,6 +304,15 @@ const H = (s) => esc(s);
 
 function gerarSite(l, r = {}) {
   l = { ...l, ...(r.whatsapp ? { whatsapp: r.whatsapp } : {}) };
+  if (ehRestaurante(l)) {
+    const o = ondeFica(l), wa = numeroWhats(l.whatsapp || l.telefone);
+    const d = { nome: (r.nome || "").trim() || nomeCurto(l), marca: (r.marca || "").trim() || palavraMarca(l), cidade: o.cidade || "sua cidade", bairro: o.bairro,
+      endereco: l.endereco || "", telefone: telBR(l.telefone), telefoneNum: numeroWhats(l.telefone), instagram: l.instagram || "", mapsUrl: l.mapsUrl || "",
+      nota: l.nota, avaliacoes: l.avaliacoes, horario: r.horario || "", sobre: (r.sobre || "").trim(), cor: /^#[0-9a-f]{6}$/i.test(r.cor || "") ? r.cor : "",
+      logo: r.logo || "", fotos: (r.fotos || []).filter(Boolean), fotoReal: l.foto || "", servicos: (r.servicos || []).filter(Boolean),
+      waL: (msg) => wa ? `https://wa.me/${wa}?text=${encodeURIComponent(msg)}` : "#onde" };
+    return { html: renderRestaurante(l, d), faltou: [], arquivo: slug(l), modelo: "restaurante" };
+  }
   const p = perfil(l), v = VIVO[p.id] || VIVO.generico, ia = l.siteIA || null, o = ondeFica(l);
   const emp = (r.nome || "").trim() || nomeCurto(l), marca = (r.marca || "").trim().toLowerCase() || palavraMarca(l), cidade = o.cidade || "sua cidade", ramo = rotulo(l) || p.termo;
   const onde = o.bairro ? `${o.bairro}, ${cidade}` : cidade;
@@ -466,4 +476,5 @@ body:not(.loading) .wa-float{transform:none;opacity:1;transition-delay:1.8s}
   return { html: s, faltou, arquivo: slug(l) };
 }
 
+export { ehRestaurante, destaquesPadrao };
 export { gerarSite, perfil, nomeCurto, palavraMarca, ondeFica, slug, numeroWhats, PERFIS, VIVO, semAcento, RAMO_W, GENERICAS };

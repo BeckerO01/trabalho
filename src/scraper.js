@@ -72,6 +72,7 @@ async function lerLugar(page, url) {
       nota: Number((notaTxt.match(/[\d,]+/) || [""])[0].replace(",", ".")) || null,
       avaliacoes,
       fechado: /permanentemente fechado|permanently closed/i.test(document.body.innerText.slice(0, 4000)),
+      foto: (q('button[aria-label^="Foto de"] img, button[jsaction*="heroHeaderImage"] img')?.src || "").replace(/=w\d+-h\d+[^&]*$/, "=w1800-h1200-k-no"),
     };
   });
 }
@@ -111,6 +112,7 @@ export async function montarLead(base, mapsUrl) {
     email: "", instagram: "", facebook: "",
     site: base.site, siteTipo, siteAcessivel: null,
     nota: base.nota, avaliacoes: base.avaliacoes, mapsUrl: mapsUrl.split("?")[0],
+    foto: /^https:\/\/lh\d\.googleusercontent\.com\//.test(base.foto || "") ? base.foto : "",
   };
   if (siteTipo === "rede_social") {
     const c = extrairContatos(base.site);
