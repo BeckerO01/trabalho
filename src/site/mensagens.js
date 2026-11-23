@@ -21,13 +21,13 @@ const CENARIOS = {
     ["Sem interesse agora", (l) => `Sem problema, obrigado por responder! Se mais para frente fizer sentido ter um site, é só me chamar neste número. Sucesso para ${nomeCurto(l)}!`],
   ],
   negociando: [
-    ["Enviar proposta", (l) => `Segue a proposta para o site de ${nomeCurto(l)}:\n\n• Site de uma página, feito para celular\n• Botão de WhatsApp em todas as seções\n• Mapa, horários e avaliações do Google\n• Textos e fotos organizados por mim\n• Prazo: [PRAZO]\n• Investimento: ${cfg.preco || "[VALOR]"}\n\nPara começar preciso só do seu ok e das fotos. Fechamos?`],
+    ["Enviar proposta", (l) => `Segue a proposta para o site de ${nomeCurto(l)}:\n\n• Site de uma página, feito para celular\n• Botão de WhatsApp em todas as seções\n• Mapa, horários e avaliações do Google\n• Textos e fotos organizados por mim\n• Prazo: ${cfg.prazo || "[PRAZO]"}\n• Investimento: ${cfg.preco || "[VALOR]"}\n\nPara começar preciso só do seu ok e das fotos. Fechamos?`],
     ["Cobrar resposta da proposta", () => `Oi! Conseguiu ver a proposta do site? Se ficou alguma dúvida sobre valor, prazo ou o que está incluso, me fala que eu explico. Se precisar, ajusto a proposta para caber melhor no momento de vocês.`],
     ["Achou caro", () => `Entendo. Pensa assim: se o site trouxer um ou dois clientes novos por mês, ele já se paga, e continua trabalhando todos os dias sem anúncio. Posso dividir o valor em parcelas ou começar por uma versão mais simples. O que fica melhor para vocês?`],
     ["Disse que vai pensar", () => `Claro, sem pressa. Para ajudar na decisão, posso deixar a prévia no ar por alguns dias para vocês mostrarem para quem quiser. Que dia posso te chamar de novo para saber o que acharam?`],
   ],
   fechado: [
-    ["Boas-vindas e próximos passos", () => `Fechado, obrigado pela confiança! Próximos passos:\n1. Você me envia logo, fotos, horários e lista de serviços.\n2. Eu te mando a primeira versão em [PRAZO].\n3. Você pede os ajustes e a gente publica.\n\nQualquer dúvida, é só chamar aqui.`],
+    ["Boas-vindas e próximos passos", () => `Fechado, obrigado pela confiança! Próximos passos:\n1. Você me envia logo, fotos, horários e lista de serviços.\n2. Eu te mando a primeira versão em ${cfg.prazo || "[PRAZO]"}.\n3. Você pede os ajustes e a gente publica.\n\nQualquer dúvida, é só chamar aqui.`],
     ["Entregar o site", (l) => `O site de ${nomeCurto(l)} está no ar: [LINK]. Dá uma olhada no celular e no computador e me diz se quer algum ajuste. Vale colocar o link na bio do Instagram e na ficha do Google.`],
     ["Pedir indicação", () => `Fico feliz que gostou do site! Se conhecer outro negócio que ainda não tem site, me indica? Atendo com o mesmo capricho.`],
   ],

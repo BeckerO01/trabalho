@@ -229,7 +229,7 @@ async function api(req, res, url) {
     if (m === "GET") return json(res, 200, configPublica());
     if (m === "PUT") {
       const b = await corpo(req);
-      for (const k of ["nome", "oferta", "preco"]) if (k in b) db.config[k] = String(b[k]).slice(0, 500);
+      for (const k of ["nome", "oferta", "preco", "prazo"]) if (k in b) db.config[k] = String(b[k]).slice(0, 500);
       if ("diasFollowup" in b) db.config.diasFollowup = Math.min(60, Math.max(1, Number(b.diasFollowup) || 3));
       if (b.anthropicKey) db.config.anthropicKey = String(b.anthropicKey).trim();
       if (b.removerChave) db.config.anthropicKey = "";

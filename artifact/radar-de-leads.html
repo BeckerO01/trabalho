@@ -289,7 +289,8 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
       <h2 style="font-size:17px">Sua abordagem</h2>
       <label class="f">Seu nome (assina a mensagem) <input id="cfgNome" placeholder="Pedro"></label>
       <label class="f">O que você oferece <textarea id="cfgOferta" rows="2" placeholder="Sites profissionais a partir de R$ 497, prontos em 7 dias, com link para WhatsApp e Google Maps."></textarea></label>
-      <label class="f">Preço ou faixa de preço (usado quando o cliente pergunta "quanto custa?") <input id="cfgPreco" placeholder="a partir de R$ 497, em até 3x"></label>
+      <label class="f">Preço (usado quando o cliente pergunta "quanto custa?") <input id="cfgPreco" placeholder="R$ 497, em até 12x"></label>
+      <label class="f">Prazo de entrega <input id="cfgPrazo" placeholder="3 dias"></label>
       <label class="f">Dias até o follow-up depois do primeiro contato <input id="cfgDias" type="number" min="1" max="30" value="3"></label>
       <h2 style="font-size:17px">Seus sites</h2>
       <label class="f">Sites de referência (um link por linha, opcional) <textarea id="cfgRefs" rows="3" placeholder="https://exemplo.com.br"></textarea></label>
@@ -440,11 +441,13 @@ const linkSeguro = (u) => /^https:\/\//i.test(String(u || "")) ? String(u) : "";
 
 // ---------------- estado + persistência ----------------
 let leads = {};            // id -> lead
-let cfg = { nome: "", oferta: "", dias: 3, msgTipo: "curta", refs: "", estilo: "" };
+const PADRAO = { nome: "Pedro Prendim", oferta: "Faço sites profissionais por R$ 497, em até 12x, e entrego em 3 dias.", preco: "R$ 497, em até 12x", prazo: "3 dias" };
+let cfg = { ...PADRAO, dias: 3, msgTipo: "curta", refs: "", estilo: "" };
+const completarCfg = () => { for (const [k, v] of Object.entries(PADRAO)) if (!cfg[k]) cfg[k] = v; };
 let resultados = [];       // extraídos, ainda não no funil
 let col = null;            // coleção privada no db (quando disponível)
 
-function carregarLocal() { leads = ls.get("radar.leads", {}); cfg = { ...cfg, ...ls.get("radar.cfg", {}) }; }
+function carregarLocal() { leads = ls.get("radar.leads", {}); cfg = { ...cfg, ...ls.get("radar.cfg", {}) }; completarCfg(); }
 async function salvarLead(l) {
   leads[l.id] = l; renderTudo();
   if (col) { try { await col.doc(l.id).set(l); } catch (e) { toast("Não foi possível salvar na nuvem: " + (e.code || "erro")); } }
@@ -471,7 +474,7 @@ async function conectarNuvem() {
     col.onSnapshot((snap) => {
       clearTimeout(timer);
       const novo = {};
-      snap.docs.forEach((d) => { const v = d.data(); if (!v) return; if (d.id === "config") cfg = { ...cfg, ...v }; else if (v.tipo === "lead") novo[d.id] = v; });
+      snap.docs.forEach((d) => { const v = d.data(); if (!v) return; if (d.id === "config") { cfg = { ...cfg, ...v }; completarCfg(); } else if (v.tipo === "lead") novo[d.id] = v; });
       if (primeira) {
         primeira = false;
         // leva para a nuvem o que existia só neste navegador
@@ -810,13 +813,13 @@ const CENARIOS = {
     ["Sem interesse agora", (l) => `Sem problema, obrigado por responder! Se mais para frente fizer sentido ter um site, é só me chamar neste número. Sucesso para ${nomeCurto(l)}!`],
   ],
   negociando: [
-    ["Enviar proposta", (l) => `Segue a proposta para o site de ${nomeCurto(l)}:\n\n• Site de uma página, feito para celular\n• Botão de WhatsApp em todas as seções\n• Mapa, horários e avaliações do Google\n• Textos e fotos organizados por mim\n• Prazo: [PRAZO]\n• Investimento: ${cfg.preco || "[VALOR]"}\n\nPara começar preciso só do seu ok e das fotos. Fechamos?`],
+    ["Enviar proposta", (l) => `Segue a proposta para o site de ${nomeCurto(l)}:\n\n• Site de uma página, feito para celular\n• Botão de WhatsApp em todas as seções\n• Mapa, horários e avaliações do Google\n• Textos e fotos organizados por mim\n• Prazo: ${cfg.prazo || "[PRAZO]"}\n• Investimento: ${cfg.preco || "[VALOR]"}\n\nPara começar preciso só do seu ok e das fotos. Fechamos?`],
     ["Cobrar resposta da proposta", () => `Oi! Conseguiu ver a proposta do site? Se ficou alguma dúvida sobre valor, prazo ou o que está incluso, me fala que eu explico. Se precisar, ajusto a proposta para caber melhor no momento de vocês.`],
     ["Achou caro", () => `Entendo. Pensa assim: se o site trouxer um ou dois clientes novos por mês, ele já se paga, e continua trabalhando todos os dias sem anúncio. Posso dividir o valor em parcelas ou começar por uma versão mais simples. O que fica melhor para vocês?`],
     ["Disse que vai pensar", () => `Claro, sem pressa. Para ajudar na decisão, posso deixar a prévia no ar por alguns dias para vocês mostrarem para quem quiser. Que dia posso te chamar de novo para saber o que acharam?`],
   ],
   fechado: [
-    ["Boas-vindas e próximos passos", () => `Fechado, obrigado pela confiança! Próximos passos:\n1. Você me envia logo, fotos, horários e lista de serviços.\n2. Eu te mando a primeira versão em [PRAZO].\n3. Você pede os ajustes e a gente publica.\n\nQualquer dúvida, é só chamar aqui.`],
+    ["Boas-vindas e próximos passos", () => `Fechado, obrigado pela confiança! Próximos passos:\n1. Você me envia logo, fotos, horários e lista de serviços.\n2. Eu te mando a primeira versão em ${cfg.prazo || "[PRAZO]"}.\n3. Você pede os ajustes e a gente publica.\n\nQualquer dúvida, é só chamar aqui.`],
     ["Entregar o site", (l) => `O site de ${nomeCurto(l)} está no ar: [LINK]. Dá uma olhada no celular e no computador e me diz se quer algum ajuste. Vale colocar o link na bio do Instagram e na ficha do Google.`],
     ["Pedir indicação", () => `Fico feliz que gostou do site! Se conhecer outro negócio que ainda não tem site, me indica? Atendo com o mesmo capricho.`],
   ],
@@ -1724,11 +1727,11 @@ $("#pGerar").addEventListener("click", () => { if (pAtual) abrirGerado(pAtual); 
 $("#mSite").addEventListener("click", () => { if (atual) abrirGerado(atual.id); });
 
 // ---------------- configurações ----------------
-function preencherCfg() { $("#cfgNome").value = cfg.nome || ""; $("#cfgOferta").value = cfg.oferta || ""; $("#cfgDias").value = cfg.dias || 3; $("#cfgPreco").value = cfg.preco || ""; $("#cfgRefs").value = cfg.refs || ""; $("#cfgEstilo").value = cfg.estilo || ""; }
+function preencherCfg() { $("#cfgNome").value = cfg.nome || ""; $("#cfgOferta").value = cfg.oferta || ""; $("#cfgDias").value = cfg.dias || 3; $("#cfgPreco").value = cfg.preco || ""; $("#cfgPrazo").value = cfg.prazo || ""; $("#cfgRefs").value = cfg.refs || ""; $("#cfgEstilo").value = cfg.estilo || ""; }
 $("#formCfg").addEventListener("submit", (e) => {
   e.preventDefault();
   cfg = { ...cfg, nome: $("#cfgNome").value.trim(), oferta: $("#cfgOferta").value.trim(), dias: Math.max(1, Number($("#cfgDias").value) || 3),
-    preco: $("#cfgPreco").value.trim().slice(0, 120), refs: $("#cfgRefs").value.trim().slice(0, 1500), estilo: $("#cfgEstilo").value.trim().slice(0, 1000) };
+    preco: $("#cfgPreco").value.trim().slice(0, 120), prazo: $("#cfgPrazo").value.trim().slice(0, 60), refs: $("#cfgRefs").value.trim().slice(0, 1500), estilo: $("#cfgEstilo").value.trim().slice(0, 1000) };
   salvarCfg(); toast("Configurações salvas");
 });
 
