@@ -32,6 +32,8 @@ function pontuarLead(l) {
 }
 
 function guardarLead(novo, busca) {
+  // foco: só quem não tem site ou usa Instagram/Facebook/WhatsApp/link na bio no lugar do site
+  if (novo.siteTipo === "proprio") { busca.ignorados = (busca.ignorados || 0) + 1; return; }
   const antigo = db.leads[novo.id];
   if (antigo) {
     // atualiza dados do Maps/site, preserva o trabalho de vendas
@@ -181,7 +183,7 @@ async function api(req, res, url) {
       const busca = {
         id: crypto.randomUUID().slice(0, 12), termos, cidade: b.cidade.trim(), bairro: String(b.bairro || "").trim(),
         tamanho: TAMANHOS[b.tamanho] ? b.tamanho : "rapida", status: "fila", criadoEm: new Date().toISOString(),
-        progresso: { fase: "Na fila", feitos: 0, total: 0 }, leadIds: [], novos: 0,
+        progresso: { fase: "Na fila", feitos: 0, total: 0 }, leadIds: [], novos: 0, ignorados: 0,
       };
       db.buscas[busca.id] = busca; salvarAgora(); processarFila();
       return json(res, 201, resumoBusca(busca));
@@ -189,7 +191,7 @@ async function api(req, res, url) {
     const busca = db.buscas[id];
     if (!busca) return json(res, 404, { erro: "Busca não encontrada." });
     if (acao === "rodar" && m === "POST") {
-      Object.assign(busca, { status: "fila", criadoEm: new Date().toISOString(), novos: 0, progresso: { fase: "Na fila", feitos: 0, total: 0 } });
+      Object.assign(busca, { status: "fila", criadoEm: new Date().toISOString(), novos: 0, ignorados: 0, progresso: { fase: "Na fila", feitos: 0, total: 0 } });
       salvarAgora(); processarFila(); return json(res, 200, resumoBusca(busca));
     }
     if (acao === "cancelar" && m === "POST") {

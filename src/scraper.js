@@ -119,10 +119,7 @@ export async function montarLead(base, mapsUrl) {
     Object.assign(lead, { instagram: c.instagram, facebook: c.facebook });
     if (c.whatsapp) Object.assign(lead, { whatsapp: c.whatsapp, whatsappFonte: "link" });
   } else if (siteTipo === "proprio") {
-    const c = await visitarSite(base.site);
-    lead.siteAcessivel = c.acessivel;
-    Object.assign(lead, { email: c.emails[0] || "", instagram: c.instagram, facebook: c.facebook });
-    if (c.whatsapp) Object.assign(lead, { whatsapp: c.whatsapp, whatsappFonte: "site" });
+    return lead; // já tem site próprio: fora do foco, não vale visitar
   }
   if (!lead.whatsapp && ehCelular(lead.telefone)) Object.assign(lead, { whatsapp: lead.telefone, whatsappFonte: "celular" });
   return lead;

@@ -53,7 +53,7 @@ function badges() {
 }
 
 // ---------- tabela de leads (com filtros) ----------
-const filtro = { texto: "", etapa: "", categoria: "", semSite: false, wa: false, nota4: false, ocultarDesc: true, naoContatados: false, ordem: "score" };
+const filtro = { texto: "", etapa: "", categoria: "", semSite: true, wa: false, nota4: false, ocultarDesc: true, naoContatados: false, ordem: "score" };
 function tabelaLeads(lista, idTabela) {
   const cats = [...new Set(lista.map((l) => l.categoria).filter(Boolean))].sort();
   const t = filtro.texto.toLowerCase();
@@ -158,7 +158,7 @@ const views = {
         <button class="btn danger" data-acao-busca="excluir">Excluir</button></div></div>
       ${b.erro ? `<div class="card" style="border-color:var(--danger);color:var(--danger);margin-bottom:16px">${esc(b.erro)}</div>` : ""}
       <div class="stats">
-        <div class="stat"><div class="k">Empresas</div><div class="v">${b.empresas}</div><div class="d">${b.novos} novas na base</div></div>
+        <div class="stat"><div class="k">Empresas</div><div class="v">${b.empresas}</div><div class="d">${b.novos} novas na base${b.ignorados ? ` · ${b.ignorados} com site próprio ignoradas` : ""}</div></div>
         <div class="stat"><div class="k">Com WhatsApp</div><div class="v">${b.comWhatsapp}</div><div class="d">${pctFmt(b.comWhatsapp, b.empresas)}</div></div>
         <div class="stat"><div class="k">Com e-mail</div><div class="v">${b.comEmail}</div><div class="d">${pctFmt(b.comEmail, b.empresas)}</div></div>
         <div class="stat destaque"><div class="k">Sem site</div><div class="v">${b.semSite}</div><div class="d">${lista.filter((l) => l.etapa !== "novo").length ? `${lista.filter((l) => l.etapa !== "novo").length} você já contatou` : "oportunidade para quem vende site"}</div></div>
