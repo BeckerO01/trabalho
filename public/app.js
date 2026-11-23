@@ -200,11 +200,11 @@ const views = {
         <label class="f">Seu Instagram (vai nas mensagens)<input name="instagram" value="${esc(c.instagram || "")}" placeholder="@pedroprendim"></label>
         <label class="f">Dias até o follow-up depois do primeiro contato<input name="diasFollowup" type="number" min="1" max="60" value="${c.diasFollowup || 3}"></label>
         <label class="f">Chave da API Claude (opcional)<input name="anthropicKey" type="password" autocomplete="off" placeholder="${c.temChave ? "Chave salva. Cole outra para trocar." : "sk-ant-…"}"></label>
-        <p class="muted" style="margin:-6px 0 0;font-size:12px">${c.temChave ? "Mensagens escritas pelo Claude. " : "Sem chave, o app usa um modelo de mensagem pronto. "}A chave fica só neste computador, em data/db.json.</p>
+        <p class="muted" style="margin:-6px 0 0;font-size:12px">${c.temChave ? "Mensagens escritas pelo Claude. " : "Sem chave, o app usa um modelo de mensagem pronto. "}A chave fica só neste computador, na pasta RadarDeLeads.</p>
         <h2 style="margin-top:8px">Hostinger (sites de demonstração)</h2>
         <label class="f">Domínio dos sites<input name="dominioSite" value="${esc(c.dominioSite || "pedroprendim.com")}" placeholder="pedroprendim.com"></label>
         <label class="f">Token da API da Hostinger<input name="hostingerToken" type="password" autocomplete="off" placeholder="${c.temHostinger ? "Token salvo. Cole outro para trocar." : "Crie em hPanel → Perfil → API"}"></label>
-        <p class="muted" style="margin:-6px 0 0;font-size:12px">Cada site fica em <b>nomedocliente.${esc(c.dominioSite || "pedroprendim.com")}</b>. O token fica só neste computador, em data/db.json. ${c.temHostinger ? '<button class="btn sm" type="button" id="testHost">Testar conexão</button> <button class="btn sm ghost danger" type="button" id="rmHost">Remover token</button>' : ""}</p>
+        <p class="muted" style="margin:-6px 0 0;font-size:12px">Cada site fica em <b>nomedocliente.${esc(c.dominioSite || "pedroprendim.com")}</b>. O token fica só neste computador, na pasta RadarDeLeads. ${c.temHostinger ? '<button class="btn sm" type="button" id="testHost">Testar conexão</button> <button class="btn sm ghost danger" type="button" id="rmHost">Remover token</button>' : ""}</p>
         <div class="acoes"><button class="btn primary" type="submit">Salvar</button>${c.temChave ? '<button class="btn danger ghost" type="button" id="rmChave">Remover chave</button>' : ""}${c.login ? '<span class="spacer"></span><button class="btn ghost" type="button" id="btnSair">Sair</button>' : ""}</div>
       </form>`];
   },
