@@ -196,6 +196,7 @@ const views = {
         <label class="f">O que você oferece<textarea name="oferta" rows="2" placeholder="Sites profissionais a partir de R$ 497, prontos em 7 dias.">${esc(c.oferta)}</textarea></label>
         <div class="row2"><label class="f">Preço (entra na resposta "quanto custa?")<input name="preco" value="${esc(c.preco || "")}" placeholder="R$ 497, em até 12x"></label>
         <label class="f">Prazo de entrega<input name="prazo" value="${esc(c.prazo || "")}" placeholder="3 dias"></label></div>
+        <label class="f">Link do seu portfólio (vai nas mensagens)<input name="portfolio" value="${esc(c.portfolio || "")}" placeholder="https://pedroprendim.com"></label>
         <label class="f">Dias até o follow-up depois do primeiro contato<input name="diasFollowup" type="number" min="1" max="60" value="${c.diasFollowup || 3}"></label>
         <label class="f">Chave da API Claude (opcional)<input name="anthropicKey" type="password" autocomplete="off" placeholder="${c.temChave ? "Chave salva. Cole outra para trocar." : "sk-ant-…"}"></label>
         <p class="muted" style="margin:-6px 0 0;font-size:12px">${c.temChave ? "Mensagens escritas pelo Claude. " : "Sem chave, o app usa um modelo de mensagem pronto. "}A chave fica só neste computador, em data/db.json.</p>
@@ -613,7 +614,7 @@ function mostrarEspera() {
 
 function mostrarPronto(st) {
   const l = AS.lead, nome = (AS.r.nome || l.nome).trim();
-  const msg = `Olá, tudo bem? Criei um site de demonstração para a ${nome}: ${st.url}\n\nDá uma olhada e me diz o que achou!`;
+  let msg = `Olá, tudo bem? Criei um site de demonstração para a ${nome}: ${st.url}\n\nDá uma olhada e me diz o que achou!`;
   const n = AS.r.whatsapp || l.whatsapp || l.telefone;
   $("#stMeio").outerHTML = `<div class="st-pronto">
     <div class="st-check"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
@@ -630,6 +631,8 @@ function mostrarPronto(st) {
   link(); $("#stMsg").addEventListener("input", link);
   $("#stWa").addEventListener("click", () => setTimeout(() => salvarLead(l.id, { mensagem: $("#stMsg").value, ...(l.etapa === "novo" ? { etapa: "contatado" } : {}) }), 300));
   confete();
+  // mensagem completa (apresentação + link + portfólio + oferta), a mesma das mensagens prontas
+  api("GET", `leads/${l.id}/mensagens`).then((m) => { const t = m.mensagens.novo?.[0]; if (t?.texto?.includes(st.url.replace(/\/$/, ""))) { $("#stMsg").value = t.texto; $("#stMsg").dispatchEvent(new Event("input")); } }).catch(() => {});
 }
 const numeroWa = (n) => { let d = String(n).replace(/\D/g, ""); if (!d.startsWith("55") && d.length <= 11) d = "55" + d; return d; };
 function confete() {

@@ -254,7 +254,7 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
   <section class="view" id="v-msgs" hidden>
     <div class="msg-top">
       <label class="f">Tipo de mensagem
-        <select id="msgTipo"><option value="curta">Curta: só o olá e pedir o responsável</option><option value="completa">Completa: já apresenta a oferta</option></select>
+        <select id="msgTipo"><option value="completa">Completa: me apresento, mostro o portfólio e a oferta</option><option value="curta">Curta: só o olá e pedir o responsável</option></select>
       </label>
       <button class="btn" id="msgIA">✨ Personalizar as próximas 20 com IA</button>
     </div>
@@ -291,6 +291,7 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
       <label class="f">O que você oferece <textarea id="cfgOferta" rows="2" placeholder="Sites profissionais a partir de R$ 497, prontos em 7 dias, com link para WhatsApp e Google Maps."></textarea></label>
       <label class="f">Preço (usado quando o cliente pergunta "quanto custa?") <input id="cfgPreco" placeholder="R$ 497, em até 12x"></label>
       <label class="f">Prazo de entrega <input id="cfgPrazo" placeholder="3 dias"></label>
+      <label class="f">Link do seu portfólio (vai nas mensagens) <input id="cfgPortfolio" placeholder="https://pedroprendim.com"></label>
       <label class="f">Dias até o follow-up depois do primeiro contato <input id="cfgDias" type="number" min="1" max="30" value="3"></label>
       <h2 style="font-size:17px">Seus sites</h2>
       <label class="f">Sites de referência (um link por linha, opcional) <textarea id="cfgRefs" rows="3" placeholder="https://exemplo.com.br"></textarea></label>
@@ -441,8 +442,8 @@ const linkSeguro = (u) => /^https:\/\//i.test(String(u || "")) ? String(u) : "";
 
 // ---------------- estado + persistência ----------------
 let leads = {};            // id -> lead
-const PADRAO = { nome: "Pedro Prendim", oferta: "Faço sites profissionais por R$ 497, em até 12x, e entrego em 3 dias.", preco: "R$ 497, em até 12x", prazo: "3 dias" };
-let cfg = { ...PADRAO, dias: 3, msgTipo: "curta", refs: "", estilo: "" };
+const PADRAO = { nome: "Pedro Prendim", oferta: "Faço sites profissionais por R$ 497, em até 12x, e entrego em 3 dias.", preco: "R$ 497, em até 12x", prazo: "3 dias", portfolio: "https://pedroprendim.com" };
+let cfg = { ...PADRAO, dias: 3, msgTipo: "completa", refs: "", estilo: "" };
 const completarCfg = () => { for (const [k, v] of Object.entries(PADRAO)) if (!cfg[k]) cfg[k] = v; };
 let resultados = [];       // extraídos, ainda não no funil
 let col = null;            // coleção privada no db (quando disponível)
@@ -796,8 +797,8 @@ $("#mWhats").addEventListener("click", () => {
 // ---------------- mensagens prontas por etapa ----------------
 const CENARIOS = {
   novo: [
-    ["Olá curto", (l) => msgOla(l, "curta")],
     ["Olá completo", (l) => msgOla(l, "completa")],
+    ["Olá curto", (l) => msgOla(l, "curta")],
   ],
   contatado: [
     ["1º retorno", (l) => msgRetorno(l)],
@@ -829,7 +830,12 @@ const CENARIOS = {
   ],
 };
 // mensagem do site de demonstração (o site é criado e publicado pelo programa do PC)
-const msgSite = (l) => `Olá, tudo bem? Criei um site de demonstração para a ${nomeCurto(l)}: ${l.siteUrl}\n\nDá uma olhada e me diz o que achou!`;
+function msgSite(l) {
+  const nota = l.nota && l.avaliacoes >= 10 ? ` (nota ${String(l.nota).replace(".", ",")} com ${l.avaliacoes} avaliações, parabéns!)` : "";
+  const falta = l.siteTipo === "proprio" ? "e tive algumas ideias para deixar o site de vocês ainda melhor" : l.siteTipo === "rede_social" ? "e notei que vocês ainda não têm um site próprio, só as redes sociais" : "e notei que vocês ainda não têm um site";
+  const oferta = cfg.preco ? `\n\nO site completo sai por ${cfg.preco}${cfg.prazo ? ", e fica pronto em " + cfg.prazo : ""}.` : "";
+  return `Olá, tudo bem? ${apresentacao()}\n\nEncontrei a ${nomeCurto(l)} no Google${nota} ${falta}. Por isso montei uma demonstração de como ficaria, sem compromisso nenhum:\n👉 ${l.siteUrl}${portfolio()}${oferta}\n\nSe gostar, é só me responder aqui que eu ajusto com as fotos e as informações de vocês. 😊`;
+}
 function cenariosDe(etapa, l) {
   const base = CENARIOS[etapa] || [];
   if (!l?.siteUrl || ["fechado", "perdido"].includes(etapa)) return base;
@@ -1137,9 +1143,11 @@ function perfil(l) {
 }
 
 // ---------- mensagens prontas ----------
-function msgOla(l, tipo = cfg.msgTipo || "curta") {
+const apresentacao = () => `Meu nome é ${cfg.nome || "[SEU NOME]"}, sou web designer e crio sites para negócios locais.`;
+const portfolio = () => cfg.portfolio ? `\n\nAqui você conhece meu trabalho: ${cfg.portfolio}` : "";
+function msgOla(l, tipo = cfg.msgTipo || "completa") {
   const emp = nomeCurto(l), v = hashN(l.id || l.nome, 3), p = perfil(l), o = ondeFica(l);
-  const eu = cfg.nome ? `Aqui é ${cfg.nome}. ` : "";
+  const eu = tipo === "curta" ? (cfg.nome ? `Aqui é ${cfg.nome}. ` : "") : apresentacao() + " ";
   const nota = l.nota ? String(l.nota).replace(".", ",") : "";
   const gancho = l.avaliacoes >= 30 && nota ? `Vi vocês no Google: nota ${nota} com ${l.avaliacoes} avaliações, parabéns!`
     : l.instagram ? `Vi o Instagram de vocês (${l.instagram}) e gostei do trabalho.` : "Encontrei vocês no Google Maps.";
@@ -1150,9 +1158,9 @@ function msgOla(l, tipo = cfg.msgTipo || "curta") {
   }
   const oferta = cfg.oferta || "Eu crio sites rápidos e acessíveis para negócios locais.";
   const fecho = ["Posso te mostrar um exemplo de como ficaria o de vocês, sem compromisso?", "Quer que eu monte uma prévia gratuita para vocês verem?", "Posso mandar uma ideia de como ficaria? É sem compromisso."][v];
-  if (l.siteTipo === "proprio") return `${oi} ${eu}Falo com ${emp}?\n\n${gancho} Dei uma olhada no site de vocês e tenho algumas ideias para ele trazer mais contatos pelo Google e pelo WhatsApp.\n\n${oferta} ${fecho}`;
+  if (l.siteTipo === "proprio") return `${oi} ${eu}Falo com ${emp}?\n\n${gancho} Dei uma olhada no site de vocês e tenho algumas ideias para ele trazer mais contatos pelo Google e pelo WhatsApp.\n\n${oferta} ${fecho}${portfolio()}`;
   const falta = l.siteTipo === "rede_social" ? "Mas notei que vocês ainda não têm um site próprio, só as redes sociais." : "Mas não encontrei um site de vocês.";
-  return `${oi} ${eu}Falo com ${emp}?\n\n${gancho} ${falta}\n\nMuita gente pesquisa por ${p.termo}${o.cidade ? " em " + o.cidade : ""} no Google antes de escolher, e um site simples faz vocês aparecerem nessas buscas e passa mais confiança.\n\n${oferta} ${fecho}`;
+  return `${oi} ${eu}Falo com ${emp}?\n\n${gancho} ${falta}\n\nMuita gente pesquisa por ${p.termo}${o.cidade ? " em " + o.cidade : ""} no Google antes de escolher, e um site simples faz vocês aparecerem nessas buscas e passa mais confiança.\n\n${oferta} ${fecho}${portfolio()}`;
 }
 function msgRetorno(l) {
   const v = hashN(l.id || l.nome, 2);
@@ -1168,7 +1176,7 @@ function renderMsgs() {
   if (box.contains(document.activeElement) && document.activeElement.tagName === "TEXTAREA") { msgSujo = true; return; }
   msgSujo = false;
   const fila = filaMsgs(), semTel = Object.values(leads).filter((l) => l.etapa === "novo" && !numeroWhats(l.whatsapp || l.telefone)).length;
-  $("#msgTipo").value = cfg.msgTipo || "curta";
+  $("#msgTipo").value = cfg.msgTipo || "completa";
   $("#msgInfo").textContent = fila.length ? `${fila.length} leads prontos para o primeiro contato, do mais quente ao mais frio.` : "";
   $("#msgIA").disabled = !fila.length;
   if (!fila.length) {
@@ -1727,11 +1735,11 @@ $("#pGerar").addEventListener("click", () => { if (pAtual) abrirGerado(pAtual); 
 $("#mSite").addEventListener("click", () => { if (atual) abrirGerado(atual.id); });
 
 // ---------------- configurações ----------------
-function preencherCfg() { $("#cfgNome").value = cfg.nome || ""; $("#cfgOferta").value = cfg.oferta || ""; $("#cfgDias").value = cfg.dias || 3; $("#cfgPreco").value = cfg.preco || ""; $("#cfgPrazo").value = cfg.prazo || ""; $("#cfgRefs").value = cfg.refs || ""; $("#cfgEstilo").value = cfg.estilo || ""; }
+function preencherCfg() { $("#cfgNome").value = cfg.nome || ""; $("#cfgOferta").value = cfg.oferta || ""; $("#cfgDias").value = cfg.dias || 3; $("#cfgPreco").value = cfg.preco || ""; $("#cfgPrazo").value = cfg.prazo || ""; $("#cfgPortfolio").value = cfg.portfolio || ""; $("#cfgRefs").value = cfg.refs || ""; $("#cfgEstilo").value = cfg.estilo || ""; }
 $("#formCfg").addEventListener("submit", (e) => {
   e.preventDefault();
   cfg = { ...cfg, nome: $("#cfgNome").value.trim(), oferta: $("#cfgOferta").value.trim(), dias: Math.max(1, Number($("#cfgDias").value) || 3),
-    preco: $("#cfgPreco").value.trim().slice(0, 120), prazo: $("#cfgPrazo").value.trim().slice(0, 60), refs: $("#cfgRefs").value.trim().slice(0, 1500), estilo: $("#cfgEstilo").value.trim().slice(0, 1000) };
+    preco: $("#cfgPreco").value.trim().slice(0, 120), prazo: $("#cfgPrazo").value.trim().slice(0, 60), portfolio: $("#cfgPortfolio").value.trim().slice(0, 200), refs: $("#cfgRefs").value.trim().slice(0, 1500), estilo: $("#cfgEstilo").value.trim().slice(0, 1000) };
   salvarCfg(); toast("Configurações salvas");
 });
 

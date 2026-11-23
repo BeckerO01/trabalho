@@ -4,8 +4,8 @@ const hashN = (s, n) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.
 let cfg = {};
 const CENARIOS = {
   novo: [
-    ["Olá curto", (l) => msgOla(l, "curta")],
     ["Olá completo", (l) => msgOla(l, "completa")],
+    ["Olá curto", (l) => msgOla(l, "curta")],
   ],
   contatado: [
     ["1º retorno", (l) => msgRetorno(l)],
@@ -37,7 +37,12 @@ const CENARIOS = {
   ],
 };
 // mensagem do site de demonstração (o site é criado e publicado pelo programa do PC)
-const msgSite = (l) => `Olá, tudo bem? Criei um site de demonstração para a ${nomeCurto(l)}: ${l.siteUrl}\n\nDá uma olhada e me diz o que achou!`;
+function msgSite(l) {
+  const nota = l.nota && l.avaliacoes >= 10 ? ` (nota ${String(l.nota).replace(".", ",")} com ${l.avaliacoes} avaliações, parabéns!)` : "";
+  const falta = l.siteTipo === "proprio" ? "e tive algumas ideias para deixar o site de vocês ainda melhor" : l.siteTipo === "rede_social" ? "e notei que vocês ainda não têm um site próprio, só as redes sociais" : "e notei que vocês ainda não têm um site";
+  const oferta = cfg.preco ? `\n\nO site completo sai por ${cfg.preco}${cfg.prazo ? ", e fica pronto em " + cfg.prazo : ""}.` : "";
+  return `Olá, tudo bem? ${apresentacao()}\n\nEncontrei a ${nomeCurto(l)} no Google${nota} ${falta}. Por isso montei uma demonstração de como ficaria, sem compromisso nenhum:\n👉 ${l.siteUrl}${portfolio()}${oferta}\n\nSe gostar, é só me responder aqui que eu ajusto com as fotos e as informações de vocês. 😊`;
+}
 function cenariosDe(etapa, l) {
   const base = CENARIOS[etapa] || [];
   if (!l?.siteUrl || ["fechado", "perdido"].includes(etapa)) return base;
@@ -46,9 +51,11 @@ function cenariosDe(etapa, l) {
 }
 const DICA_ETAPA = { novo: "Ainda não recebeu mensagem.", contatado: "Você mandou mensagem e ainda não teve resposta.", respondeu: "O cliente respondeu. Escolha o que ele disse ou cole a resposta para a IA ajudar.",
   negociando: "Tem interesse: proposta e negociação.", fechado: "Cliente fechado.", perdido: "Não quis ou não respondeu depois de várias tentativas." };
-function msgOla(l, tipo = cfg.msgTipo || "curta") {
+const apresentacao = () => `Meu nome é ${cfg.nome || "[SEU NOME]"}, sou web designer e crio sites para negócios locais.`;
+const portfolio = () => cfg.portfolio ? `\n\nAqui você conhece meu trabalho: ${cfg.portfolio}` : "";
+function msgOla(l, tipo = cfg.msgTipo || "completa") {
   const emp = nomeCurto(l), v = hashN(l.id || l.nome, 3), p = perfil(l), o = ondeFica(l);
-  const eu = cfg.nome ? `Aqui é ${cfg.nome}. ` : "";
+  const eu = tipo === "curta" ? (cfg.nome ? `Aqui é ${cfg.nome}. ` : "") : apresentacao() + " ";
   const nota = l.nota ? String(l.nota).replace(".", ",") : "";
   const gancho = l.avaliacoes >= 30 && nota ? `Vi vocês no Google: nota ${nota} com ${l.avaliacoes} avaliações, parabéns!`
     : l.instagram ? `Vi o Instagram de vocês (${l.instagram}) e gostei do trabalho.` : "Encontrei vocês no Google Maps.";
@@ -59,9 +66,9 @@ function msgOla(l, tipo = cfg.msgTipo || "curta") {
   }
   const oferta = cfg.oferta || "Eu crio sites rápidos e acessíveis para negócios locais.";
   const fecho = ["Posso te mostrar um exemplo de como ficaria o de vocês, sem compromisso?", "Quer que eu monte uma prévia gratuita para vocês verem?", "Posso mandar uma ideia de como ficaria? É sem compromisso."][v];
-  if (l.siteTipo === "proprio") return `${oi} ${eu}Falo com ${emp}?\n\n${gancho} Dei uma olhada no site de vocês e tenho algumas ideias para ele trazer mais contatos pelo Google e pelo WhatsApp.\n\n${oferta} ${fecho}`;
+  if (l.siteTipo === "proprio") return `${oi} ${eu}Falo com ${emp}?\n\n${gancho} Dei uma olhada no site de vocês e tenho algumas ideias para ele trazer mais contatos pelo Google e pelo WhatsApp.\n\n${oferta} ${fecho}${portfolio()}`;
   const falta = l.siteTipo === "rede_social" ? "Mas notei que vocês ainda não têm um site próprio, só as redes sociais." : "Mas não encontrei um site de vocês.";
-  return `${oi} ${eu}Falo com ${emp}?\n\n${gancho} ${falta}\n\nMuita gente pesquisa por ${p.termo}${o.cidade ? " em " + o.cidade : ""} no Google antes de escolher, e um site simples faz vocês aparecerem nessas buscas e passa mais confiança.\n\n${oferta} ${fecho}`;
+  return `${oi} ${eu}Falo com ${emp}?\n\n${gancho} ${falta}\n\nMuita gente pesquisa por ${p.termo}${o.cidade ? " em " + o.cidade : ""} no Google antes de escolher, e um site simples faz vocês aparecerem nessas buscas e passa mais confiança.\n\n${oferta} ${fecho}${portfolio()}`;
 }
 function msgRetorno(l) {
   const v = hashN(l.id || l.nome, 2);
@@ -70,7 +77,7 @@ function msgRetorno(l) {
 }
 /** Todas as mensagens prontas de um lead, por etapa */
 export function mensagensDoLead(l, config) {
-  cfg = config || {};
+  cfg = { msgTipo: "completa", ...(config || {}) };
   l = { ...l, siteUrl: l.siteDemo?.status === "pronto" ? l.siteDemo.url : l.siteUrl || "" };
   const out = {};
   for (const e of Object.keys(CENARIOS)) out[e] = cenariosDe(e, l).map(([nome, f]) => ({ nome, texto: f(l) }));
