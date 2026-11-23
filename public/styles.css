@@ -181,3 +181,41 @@ td .sub { font-size: 12px; color: var(--muted); }
 
 .toast { position: fixed; z-index: 50; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .toast.show { opacity: 1; }
+
+/* assistente de criação de site */
+dialog.assist { border: 0; border-radius: 16px; padding: 0; width: min(760px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); background: var(--surface); color: var(--ink); box-shadow: 0 30px 80px -20px rgb(0 0 0 / .45); }
+dialog.assist::backdrop { background: rgb(10 20 16 / .55); backdrop-filter: blur(3px); }
+.as { padding: 24px; display: grid; gap: 16px; }
+.as-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.as-h h2 { font-size: 22px; }
+.as-h p { margin: 4px 0 0; color: var(--muted); }
+.passos-as { display: flex; gap: 6px; font-size: 12px; color: var(--muted); }
+.passos-as span { padding: 3px 10px; border-radius: 99px; background: var(--sunk); }
+.passos-as span.on { background: var(--accent); color: var(--accent-ink); }
+.pergunta { display: grid; gap: 6px; }
+.pergunta > b { font-size: 14px; }
+.pergunta > small { color: var(--muted); font-size: 12px; }
+.sub-row { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.sub-row input { border: 0; border-radius: 0; flex: 1; min-width: 0; font-family: var(--f-mono); }
+.sub-row span { padding: 0 12px; color: var(--muted); font-family: var(--f-mono); font-size: 13px; white-space: nowrap; }
+.cor-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cor-row input[type=color] { width: 52px; height: 38px; padding: 2px; }
+.fotos-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.foto-slot { aspect-ratio: 1; border: 1.5px dashed var(--line); border-radius: 10px; display: grid; place-items: center; text-align: center; font-size: 11px; color: var(--muted); cursor: pointer; background: var(--sunk) center/cover no-repeat; position: relative; overflow: hidden; padding: 4px; }
+.foto-slot.tem { border-style: solid; color: transparent; }
+.foto-slot input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.resumo { background: var(--sunk); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px; font-size: 14px; }
+.resumo a { font-family: var(--f-mono); }
+.previa-frame { width: 100%; height: 420px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.espera { text-align: center; padding: 40px 24px; display: grid; gap: 18px; justify-items: center; }
+.espera .radar-g { width: 96px; height: 96px; border-radius: 50%; border: 2px solid var(--accent); position: relative; overflow: hidden; }
+.espera .radar-g::after { content: ""; position: absolute; inset: 0; background: conic-gradient(transparent 0 70%, var(--accent)); animation: sweep 1.6s linear infinite; }
+.etapas-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; text-align: left; min-width: 260px; }
+.etapas-lista li { display: flex; gap: 10px; align-items: center; color: var(--muted); }
+.etapas-lista li::before { content: ""; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); flex: none; }
+.etapas-lista li.atual { color: var(--ink); font-weight: 600; }
+.etapas-lista li.atual::before { border-color: var(--accent); border-top-color: transparent; animation: sweep .8s linear infinite; }
+.etapas-lista li.feito { color: var(--ink); }
+.etapas-lista li.feito::before { background: var(--accent); border-color: var(--accent); }
+.pronto-link { font: 600 18px var(--f-mono); word-break: break-all; }
+.site-pill { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; font-weight: 600; color: var(--accent); }

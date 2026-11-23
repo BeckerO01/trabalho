@@ -33,6 +33,15 @@ Tudo fica em `data/db.json`, só no seu computador. O servidor só aceita conex�
 - Ler o Maps automaticamente vai contra os termos de uso do Google. Use com moderação (o app já espera entre uma empresa e outra) e por sua conta.
 - `RADAR_HEADFUL=1 npm start` mostra o navegador trabalhando.
 
+## Site de demonstração (com um clique)
+1. Em **Configurações**, cole o token da API da Hostinger (hPanel → Perfil → API) e confira o domínio (padrão: `pedroprendim.com`). Clique em **Testar conexão**.
+2. Abra um lead e clique em **Criar site de demonstração**.
+3. Responda as perguntas (já vêm preenchidas): endereço, nome, WhatsApp, serviços, horário, cor, texto "Quem somos", logo e fotos. **Ver prévia** mostra o site antes.
+4. Confirme. O programa monta o site (sem usar IA), cria `nomedocliente.pedroprendim.com` e envia os arquivos.
+5. Na tela final aparece a mensagem pronta com o link e o botão **Enviar no WhatsApp**.
+
+O site é gerado a partir de `src/site/molde-aurora.html` com os perfis de ramo (`src/site/gerador.js`) e fica fora do Google (noindex).
+
 ## Enviar para o Claude (usar no celular)
 1. No programa, filtre os leads e clique em **Enviar ao Claude**: os leads são copiados e um arquivo `radar-leads-AAAA-MM-DD.json` é baixado.
 2. O Radar no Claude abre (https://claude.ai/artifact/ERs5tuq5h5d897HRbZSsLp). Em **Importar do PC**, cole (Ctrl+V) ou escolha o arquivo.

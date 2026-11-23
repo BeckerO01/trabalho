@@ -75,7 +75,7 @@ function tabelaLeads(lista, idTabela) {
     ${vis.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Empresa</th><th>Local</th><th>Telefone</th><th>Canais</th><th><button data-ordem="nota">Nota ${filtro.ordem === "nota" ? "↓" : ""}</button></th><th><button data-ordem="score">Score ${filtro.ordem === "score" ? "↓" : ""}</button></th><th>Status</th></tr></thead>
       <tbody>${vis.map((l) => { const [bairro, cid] = local(l.endereco); return `<tr data-lead="${l.id}" class="${l.descartado ? "descartado" : ""}">
-        <td><div class="nome">${esc(l.nome)}</div><div class="sub">${esc(l.categoria)}${l.siteTipo !== "proprio" ? ` · <span class="tag-sem">${l.siteTipo === "rede_social" ? "só rede social" : "sem site"}</span>` : ""}</div></td>
+        <td><div class="nome">${esc(l.nome)}${l.siteDemo?.status === "pronto" ? ' <span class="site-pill">● site no ar</span>' : ""}</div><div class="sub">${esc(l.categoria)}${l.siteTipo !== "proprio" ? ` · <span class="tag-sem">${l.siteTipo === "rede_social" ? "só rede social" : "sem site"}</span>` : ""}</div></td>
         <td><div>${esc(bairro)}</div><div class="sub">${esc(cid)}</div></td>
         <td class="num">${esc(tel(l.telefone)) || "–"}</td><td>${canais(l)}</td>
         <td class="num">${l.nota ? `★ ${String(l.nota).replace(".", ",")} <span class="muted">(${(l.avaliacoes || 0).toLocaleString("pt-BR")})</span>` : "–"}</td>
@@ -195,6 +195,10 @@ const views = {
         <label class="f">Dias até o follow-up depois do primeiro contato<input name="diasFollowup" type="number" min="1" max="60" value="${c.diasFollowup || 3}"></label>
         <label class="f">Chave da API Claude (opcional)<input name="anthropicKey" type="password" autocomplete="off" placeholder="${c.temChave ? "Chave salva. Cole outra para trocar." : "sk-ant-…"}"></label>
         <p class="muted" style="margin:-6px 0 0;font-size:12px">${c.temChave ? "Mensagens escritas pelo Claude. " : "Sem chave, o app usa um modelo de mensagem pronto. "}A chave fica só neste computador, em data/db.json.</p>
+        <h2 style="margin-top:8px">Hostinger (sites de demonstração)</h2>
+        <label class="f">Domínio dos sites<input name="dominioSite" value="${esc(c.dominioSite || "pedroprendim.com")}" placeholder="pedroprendim.com"></label>
+        <label class="f">Token da API da Hostinger<input name="hostingerToken" type="password" autocomplete="off" placeholder="${c.temHostinger ? "Token salvo. Cole outro para trocar." : "Crie em hPanel → Perfil → API"}"></label>
+        <p class="muted" style="margin:-6px 0 0;font-size:12px">Cada site fica em <b>nomedocliente.${esc(c.dominioSite || "pedroprendim.com")}</b>. O token fica só neste computador, em data/db.json. ${c.temHostinger ? '<button class="btn sm" type="button" id="testHost">Testar conexão</button> <button class="btn sm ghost danger" type="button" id="rmHost">Remover token</button>' : ""}</p>
         <div class="acoes"><button class="btn primary" type="submit">Salvar</button>${c.temChave ? '<button class="btn danger ghost" type="button" id="rmChave">Remover chave</button>' : ""}${c.login ? '<span class="spacer"></span><button class="btn ghost" type="button" id="btnSair">Sair</button>' : ""}</div>
       </form>`];
   },
@@ -251,6 +255,8 @@ document.addEventListener("click", async (e) => {
   const ad = e.target.closest("[data-adiar]");
   if (ad) { const d = new Date(Date.now() + 2 * 864e5); await salvarLead(ad.dataset.adiar, { followup: d.toISOString().slice(0, 10) }); toast("Adiado 2 dias"); }
   if (e.target.id === "btnSair") { await api("POST", "logout").catch(() => {}); location.href = "/login"; return; }
+  if (e.target.id === "testHost") { try { const r = await api("POST", "hostinger/testar"); toast(`Conectado à Hostinger (conta ${r.conta}, ${r.subdominios} subdomínios).`); } catch (err) { toast(err.message); } return; }
+  if (e.target.id === "rmHost") { S.config = await api("PUT", "config", { removerHostinger: true }); $("#view").dataset.v = ""; render(); toast("Token removido"); return; }
   if (e.target.id === "rmChave") { S.config = await api("PUT", "config", { removerChave: true }); $("#view").dataset.v = ""; render(); toast("Chave removida"); }
 });
 document.addEventListener("submit", async (e) => {
@@ -265,6 +271,7 @@ document.addEventListener("submit", async (e) => {
   if (e.target.id === "formCfg") {
     const f = Object.fromEntries(new FormData(e.target));
     if (!f.anthropicKey) delete f.anthropicKey;
+    if (!f.hostingerToken) delete f.hostingerToken;
     S.config = await api("PUT", "config", f); $("#view").dataset.v = ""; render(); toast("Configurações salvas");
   }
 });
@@ -309,6 +316,8 @@ function abrirLead(id) {
   const waFonte = { site: "link no site", celular: "celular (provável)", link: "link na bio" }[l.whatsappFonte] || "";
   d.innerHTML = `<div class="d-h"><div><h2>${esc(l.nome)}</h2><p class="muted" style="margin:4px 0 0">${esc(l.categoria)}</p></div><button class="btn ghost" id="dFechar" aria-label="Fechar">✕</button></div>
     ${siteBox}
+    ${l.siteDemo?.status === "pronto" ? `<div class="alerta-site tem">Site de demonstração: <a href="${esc(l.siteDemo.url)}" target="_blank" rel="noopener">${esc(l.siteDemo.url)}</a></div>` : ""}
+    <div class="acoes"><button class="btn primary" data-criar-site="${l.id}">${l.siteDemo?.status === "pronto" ? "Refazer o site de demonstração" : "Criar site de demonstração"}</button></div>
     <dl class="info">
       <dt>Score</dt><dd>${score(l)} <span class="muted" style="font-size:12px">${esc((l.motivos || []).join(" · "))}</span></dd>
       <dt>Telefone</dt><dd class="num">${esc(tel(l.telefone)) || "–"}</dd>
@@ -369,3 +378,166 @@ function iniciarPolling() {
   if (S.buscas.some((b) => b.status === "rodando" || b.status === "fila")) iniciarPolling();
   if (pendentes().length) toast(`⏰ ${pendentes().length} lead(s) esperando retorno`);
 })();
+
+// ================= ASSISTENTE: CRIAR SITE DE DEMONSTRAÇÃO =================
+const AS = { lead: null, padrao: null, resp: null, imgs: {}, passo: 1, timer: null };
+const ETAPAS_PUB = [["gerando", "Montando o site com os dados da empresa"], ["conta", "Conectando à Hostinger"], ["subdominio", "Criando o endereço"], ["arquivos", "Enviando o site"], ["conferindo", "Conferindo se está no ar"]];
+const passosAs = (n) => `<div class="passos-as">${["Perguntas", "Confirmar", "Publicando", "Pronto"].map((t, i) => `<span class="${i + 1 === n ? "on" : ""}">${i + 1}. ${t}</span>`).join("")}</div>`;
+const fecharAs = () => { clearInterval(AS.timer); $("#siteDlg").close(); };
+
+async function abrirAssistente(id) {
+  const l = S.leads.find((x) => x.id === id); if (!l) return;
+  if (!S.config.temHostinger) { toast("Configure a Hostinger em Configurações antes de criar sites."); location.hash = "config"; return; }
+  AS.lead = l; AS.imgs = {}; AS.resp = null;
+  $("#siteCorpo").innerHTML = `<div class="espera"><div class="radar-g"></div><p>Carregando os dados de ${esc(l.nome)}…</p></div>`;
+  $("#siteDlg").showModal();
+  AS.padrao = await api("GET", `site/${id}/padrao`);
+  // se já está publicando, vai direto para a espera
+  const st = await api("GET", `site/${id}`).catch(() => null);
+  if (st?.status === "publicando") return telaEspera();
+  telaPerguntas();
+}
+
+function telaPerguntas() {
+  const p = AS.padrao, r = AS.resp || p, l = AS.lead;
+  $("#siteCorpo").innerHTML = `<form class="as" id="asForm">
+    <div class="as-h"><div><h2>Criar site · ${esc(l.nome)}</h2><p>Tudo já vem preenchido com os dados do lead. Mude só o que quiser.</p></div><button type="button" class="btn ghost" data-as="fechar" aria-label="Fechar">✕</button></div>
+    ${passosAs(1)}
+    ${p.publicado ? `<div class="alerta-site tem">Este lead já tem site no ar: <a href="${esc(p.publicado)}" target="_blank" rel="noopener">${esc(p.publicado)}</a>. Publicar de novo substitui a versão atual.</div>` : ""}
+    <label class="pergunta"><b>Quer fazer alguma alteração antes de gerar?</b><small>Se não, é só seguir: o site sai no padrão do ramo (${esc(p.ramo)}).</small></label>
+    <label class="pergunta"><b>Endereço do site</b>
+      <div class="sub-row"><span>https://</span><input name="sub" value="${esc(r.sub || p.sub)}" maxlength="40" required autocomplete="off"><span>.${esc(p.dominio)}</span></div></label>
+    <div class="row2">
+      <label class="pergunta"><b>Nome da empresa no site</b><input name="nome" value="${esc(r.nome)}" maxlength="80" required></label>
+      <label class="pergunta"><b>Logo em texto (se não tiver imagem)</b><input name="marca" value="${esc(r.marca)}" maxlength="20"></label>
+    </div>
+    <label class="pergunta"><b>WhatsApp que recebe os contatos do site</b><input name="whatsapp" value="${esc(tel(r.whatsapp))}" inputmode="tel" required></label>
+    <label class="pergunta"><b>Serviços que aparecem no site</b><small>Um por linha, até 6. Vieram do ramo: confira se a empresa faz mesmo.</small><textarea name="servicos" rows="6">${esc((r.servicos || []).join("\n"))}</textarea></label>
+    <label class="pergunta"><b>Horário de funcionamento</b><small>Opcional. Ex.: "Seg a sex · 9h às 19h" (uma linha por dia ou faixa).</small><textarea name="horario" rows="2" placeholder="Em branco: &quot;horários sob consulta&quot;">${esc(r.horario)}</textarea></label>
+    <div class="pergunta"><b>Cor principal</b>
+      <div class="cor-row"><input type="color" name="cor" value="${esc(r.cor || p.corPadrao)}"><label class="chip" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" name="corPadrao" ${r.cor ? "" : "checked"} style="width:auto"> Usar a cor padrão do ramo</label></div></div>
+    <label class="pergunta"><b>Texto "Quem somos"</b><small>Opcional. Em branco, o gerador escreve um texto a partir do ramo e do bairro.</small><textarea name="sobre" rows="3" maxlength="600">${esc(r.sobre)}</textarea></label>
+    <div class="pergunta"><b>Logo e fotos</b><small>Opcional. A logo substitui o nome no topo; as fotos entram nos cartões "Por que a gente". Use fotos reais da empresa (Instagram ou Google).</small>
+      <div class="fotos-row">${["logo", "foto1", "foto2", "foto3", "foto4"].map((c) => `<label class="foto-slot ${AS.imgs[c] ? "tem" : ""}" ${AS.imgs[c] ? `style="background-image:url('${AS.imgs[c]}')"` : ""}>${c === "logo" ? "Logo" : "Foto " + c.slice(-1)}<input type="file" accept="image/*" data-img="${c}"></label>`).join("")}</div></div>
+    <div class="acoes"><button type="button" class="btn" data-as="previa">Ver prévia</button><span class="spacer"></span><button class="btn primary" type="submit">Continuar →</button></div>
+    <iframe class="previa-frame" id="asPrevia" hidden title="Prévia do site" sandbox="allow-scripts"></iframe>
+  </form>`;
+}
+
+function lerRespostas() {
+  const f = new FormData($("#asForm"));
+  return { sub: String(f.get("sub") || "").trim().toLowerCase(), nome: f.get("nome"), marca: f.get("marca"), whatsapp: String(f.get("whatsapp") || "").replace(/\D/g, ""),
+    servicos: String(f.get("servicos") || "").split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 6), horario: f.get("horario"),
+    cor: f.get("corPadrao") ? "" : f.get("cor"), sobre: f.get("sobre") };
+}
+const imagensEnvio = () => Object.entries(AS.imgs).map(([campo, dataUrl]) => ({ campo, dataUrl }));
+
+// reduz a imagem no navegador (até 1600 px, JPEG) para o site ficar leve
+function reduzirImagem(arquivo, max = 1600) {
+  return new Promise((ok, erro) => {
+    const img = new Image(), url = URL.createObjectURL(arquivo);
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      ok(arquivo.type === "image/png" && max <= 600 ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = () => erro(new Error("Não foi possível ler a imagem."));
+    img.src = url;
+  });
+}
+
+function telaConfirmar() {
+  const r = AS.resp, p = AS.padrao, url = `https://${r.sub}.${p.dominio}`;
+  $("#siteCorpo").innerHTML = `<div class="as">
+    <div class="as-h"><div><h2>Confirmar publicação</h2><p>Confira antes de colocar no ar.</p></div><button type="button" class="btn ghost" data-as="fechar" aria-label="Fechar">✕</button></div>
+    ${passosAs(2)}
+    <div class="resumo">
+      <div>Endereço: <a>${esc(url)}</a></div>
+      <div>Empresa: <b>${esc(r.nome)}</b> · WhatsApp ${esc(tel(r.whatsapp))}</div>
+      <div>Serviços: ${esc(r.servicos.join(", ") || "padrão do ramo")}</div>
+      <div>Horário: ${esc(r.horario || "sob consulta")} · Cor: ${r.cor ? `<span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${esc(r.cor)};vertical-align:-1px"></span> ${esc(r.cor)}` : "padrão do ramo"}</div>
+      <div>Logo e fotos: ${Object.keys(AS.imgs).length ? Object.keys(AS.imgs).length + " imagem(ns)" : "nenhuma (visual da marca)"}</div>
+    </div>
+    ${p.publicado && p.publicado.includes(r.sub + ".") ? `<p class="muted">O site atual deste endereço será substituído.</p>` : ""}
+    <p><b>Quer mesmo publicar o site agora?</b> Ele fica fora do Google (marcado como prévia).</p>
+    <div class="acoes"><button class="btn" data-as="voltar">← Voltar e alterar</button><span class="spacer"></span><button class="btn primary" data-as="publicar">Sim, publicar site</button></div>
+  </div>`;
+}
+
+function telaEspera() {
+  const nome = AS.lead.nome;
+  $("#siteCorpo").innerHTML = `<div class="as">${passosAs(3)}<div class="espera">
+    <div class="radar-g" aria-hidden="true"></div>
+    <div><h2>Criando o site de ${esc(nome)}</h2><p class="muted">Leva menos de um minuto. Pode deixar esta janela aberta.</p></div>
+    <ol class="etapas-lista" id="asEtapas">${ETAPAS_PUB.map(([k, t]) => `<li data-e="${k}">${t}</li>`).join("")}</ol>
+  </div></div>`;
+  clearInterval(AS.timer);
+  const tick = async () => {
+    const st = await api("GET", `site/${AS.lead.id}`).catch(() => null);
+    if (!st) return;
+    const i = ETAPAS_PUB.findIndex(([k]) => k === st.etapa);
+    document.querySelectorAll("#asEtapas li").forEach((li, j) => { li.className = st.status === "pronto" || j < i ? "feito" : j === i ? "atual" : ""; });
+    if (st.status === "pronto") { clearInterval(AS.timer); setTimeout(() => telaPronto(st), 600); atualizar().then(render); }
+    if (st.status === "erro") { clearInterval(AS.timer); telaErro(st.erro); }
+  };
+  tick(); AS.timer = setInterval(tick, 1500);
+}
+
+function telaPronto(st) {
+  const l = AS.lead, nome = (AS.resp?.nome || l.nome).trim();
+  const msg = `Olá, tudo bem? Criei um site de demonstração para a ${nome}: ${st.url}\n\nDá uma olhada e me diz o que achou!`;
+  const n = l.whatsapp || l.telefone;
+  $("#siteCorpo").innerHTML = `<div class="as">
+    <div class="as-h"><div><h2>Site no ar! 🎉</h2><p>Pronto para mandar para ${esc(l.nome)}.</p></div><button type="button" class="btn ghost" data-as="fechar" aria-label="Fechar">✕</button></div>
+    ${passosAs(4)}
+    <a class="pronto-link" href="${esc(st.url)}" target="_blank" rel="noopener">${esc(st.url)} ↗</a>
+    <label class="pergunta"><b>Mensagem pronta</b><textarea id="asMsg" rows="5">${esc(msg)}</textarea></label>
+    <div class="acoes">
+      <a class="btn wa" id="asWa" target="_blank" rel="noopener" ${n ? "" : 'aria-disabled="true"'}>Enviar no WhatsApp ↗</a>
+      <button class="btn" data-as="copiar">Copiar mensagem</button>
+      <a class="btn" href="${esc(st.url)}" target="_blank" rel="noopener">Abrir site</a>
+      <span class="spacer"></span><button class="btn ghost" data-as="fechar">Fechar</button>
+    </div>
+  </div>`;
+  const link = () => { $("#asWa").href = n ? `https://wa.me/${n}?text=${encodeURIComponent($("#asMsg").value)}` : "#"; };
+  link(); $("#asMsg").addEventListener("input", link);
+  $("#asWa").addEventListener("click", () => setTimeout(() => salvarLead(l.id, { mensagem: $("#asMsg").value, ...(l.etapa === "novo" ? { etapa: "contatado" } : {}) }), 300));
+}
+
+function telaErro(erro) {
+  $("#siteCorpo").innerHTML = `<div class="as"><div class="as-h"><div><h2>Não deu para publicar</h2><p>${esc(erro || "Erro desconhecido.")}</p></div><button type="button" class="btn ghost" data-as="fechar" aria-label="Fechar">✕</button></div>
+    <div class="acoes"><button class="btn" data-as="voltar">← Voltar</button><span class="spacer"></span><button class="btn primary" data-as="publicar">Tentar de novo</button></div></div>`;
+}
+
+$("#siteDlg").addEventListener("change", async (e) => {
+  const c = e.target.dataset?.img; if (!c || !e.target.files[0]) return;
+  try { AS.imgs[c] = await reduzirImagem(e.target.files[0], c === "logo" ? 600 : 1600); const slot = e.target.closest(".foto-slot"); slot.classList.add("tem"); slot.style.backgroundImage = `url('${AS.imgs[c]}')`; }
+  catch (err) { toast(err.message); }
+});
+$("#siteDlg").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (!e.target.reportValidity()) return;
+  AS.resp = lerRespostas();
+  if (AS.resp.whatsapp.length < 10) { toast("Confira o WhatsApp: precisa ter DDD."); return; }
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/.test(AS.resp.sub)) { toast("Endereço: use só letras minúsculas e números, sem espaços nem acentos."); return; }
+  telaConfirmar();
+});
+$("#siteDlg").addEventListener("click", async (e) => {
+  const a = e.target.closest("[data-as]")?.dataset.as; if (!a) return;
+  if (a === "fechar") fecharAs();
+  if (a === "voltar") telaPerguntas();
+  if (a === "copiar") { try { await navigator.clipboard.writeText($("#asMsg").value); toast("Mensagem copiada"); } catch { $("#asMsg").select(); } }
+  if (a === "previa") {
+    const fr = $("#asPrevia"); fr.hidden = false; fr.srcdoc = '<p style="font:14px system-ui;padding:20px">Gerando prévia…</p>';
+    const { html } = await api("POST", `site/${AS.lead.id}/previa`, { respostas: lerRespostas(), imagens: imagensEnvio() });
+    fr.srcdoc = html; fr.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  if (a === "publicar") {
+    telaEspera();
+    try { await api("POST", `site/${AS.lead.id}/publicar`, { respostas: { ...AS.resp, whatsapp: AS.resp.whatsapp }, imagens: imagensEnvio() }); }
+    catch (err) { clearInterval(AS.timer); telaErro(err.message); }
+  }
+});
+$("#siteDlg").addEventListener("close", () => clearInterval(AS.timer));
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-criar-site]"); if (b) { e.stopPropagation(); abrirAssistente(b.dataset.criarSite); } }, true);

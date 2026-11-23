@@ -8,6 +8,8 @@ import { rodarBusca, TAMANHOS } from "./scraper.js";
 import { pontuar, temperatura } from "./scoring.js";
 import { mensagemIA, mensagemPronta } from "./ia.js";
 import * as auth from "./auth.js";
+import { gerarSite, perfil, nomeCurto, palavraMarca, slug, semAcento, RAMO_W, GENERICAS } from "./site/gerador.js";
+import * as hostinger from "./hostinger.js";
 
 auth.validarConfig();
 
@@ -79,7 +81,7 @@ function json(res, code, body) {
 }
 async function corpo(req) {
   let s = "";
-  for await (const c of req) { s += c; if (s.length > 1e6) throw new Error("corpo grande demais"); }
+  for await (const c of req) { s += c; if (s.length > 25e6) throw new Error("corpo grande demais"); }
   return s ? JSON.parse(s) : {};
 }
 const resumoBusca = (b) => {
@@ -92,7 +94,69 @@ const resumoBusca = (b) => {
     semSite: ls.filter((l) => l.siteTipo !== "proprio").length,
   };
 };
-const configPublica = () => ({ ...db.config, anthropicKey: undefined, login: auth.ATIVO, temChave: Boolean(process.env.ANTHROPIC_API_KEY || db.config.anthropicKey) });
+const configPublica = () => ({ ...db.config, anthropicKey: undefined, hostingerToken: undefined, temHostinger: Boolean(db.config.hostingerToken), dominioSite: db.config.dominioSite || "pedroprendim.com", login: auth.ATIVO, temChave: Boolean(process.env.ANTHROPIC_API_KEY || db.config.anthropicKey) });
+// ---------- site de demonstração ----------
+// endereço curto: só as palavras que identificam a empresa (sem "clínica", "estética", "de"...)
+function subPadrao(lead) {
+  const ws = semAcento(nomeCurto(lead)).split(/[^a-z0-9]+/).filter((w) => w && !RAMO_W.test(w) && !GENERICAS.test(w));
+  const s = (ws.length ? ws.join("") : slug(lead).replace(/-/g, "")).slice(0, 24);
+  return s || "site" + Date.now().toString(36);
+}
+const cfgHost = () => ({ token: db.config.hostingerToken, dominio: db.config.dominioSite || "pedroprendim.com" });
+const publicando = new Set();
+function padraoSite(lead) {
+  const p = perfil(lead);
+  const ant = lead.siteDemo?.respostas || {};
+  return {
+    dominio: cfgHost().dominio,
+    sub: lead.siteDemo?.sub || subPadrao(lead),
+    nome: ant.nome || nomeCurto(lead), marca: ant.marca || palavraMarca(lead),
+    whatsapp: ant.whatsapp || lead.whatsapp || lead.telefone || "",
+    servicos: ant.servicos || p.servicos.slice(0, 6),
+    horario: ant.horario || "", sobre: ant.sobre || "",
+    cor: ant.cor || "", corPadrao: (() => { const [, , , , pr, ac] = p.paleta; const l = (h) => { const n = parseInt(h.slice(1), 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; }; return l(pr) < 0.12 ? ac : pr; })(),
+    ramo: p.termo, publicado: lead.siteDemo?.status === "pronto" ? lead.siteDemo.url : "",
+  };
+}
+const EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/svg+xml": "svg" };
+function decodificarImagens(imagens) {
+  // [{campo: "logo"|"foto1".."foto4", dataUrl}] -> arquivos
+  return (Array.isArray(imagens) ? imagens : []).slice(0, 5).map((i) => {
+    const m = String(i?.dataUrl || "").match(/^data:(image\/(?:jpeg|png|webp|svg\+xml));base64,(.+)$/);
+    if (!m || !/^(logo|foto[1-4])$/.test(i.campo)) return null;
+    const dados = Buffer.from(m[2], "base64");
+    if (dados.length > 4 * 1024 * 1024) return null;
+    return { campo: i.campo, caminho: `${i.campo}.${EXT[m[1]]}`, dados, dataUrl: i.dataUrl };
+  }).filter(Boolean);
+}
+function limparRespostas(r = {}, imagens = [], paraPublicar = false) {
+  const t = (v, n) => String(v ?? "").slice(0, n);
+  const imgs = decodificarImagens(imagens);
+  const src = (campo) => { const i = imgs.find((x) => x.campo === campo); return i ? (paraPublicar ? i.caminho : i.dataUrl) : ""; };
+  return {
+    nome: t(r.nome, 80), marca: t(r.marca, 20), whatsapp: t(r.whatsapp, 20).replace(/\D/g, ""),
+    servicos: (Array.isArray(r.servicos) ? r.servicos : String(r.servicos || "").split("\n")).map((x) => t(x, 60).trim()).filter(Boolean).slice(0, 6),
+    horario: t(r.horario, 200), sobre: t(r.sobre, 600), cor: /^#[0-9a-f]{6}$/i.test(r.cor || "") ? r.cor : "",
+    logo: src("logo"), fotos: ["foto1", "foto2", "foto3", "foto4"].map(src),
+  };
+}
+async function publicarDemo(lead, sub, respostas, imagens) {
+  publicando.add(lead.id);
+  const r = limparRespostas(respostas, imagens, true);
+  lead.siteDemo = { status: "publicando", etapa: "gerando", sub, url: `https://${sub}.${cfgHost().dominio}/`, respostas: { ...r, logo: "", fotos: [] }, inicio: new Date().toISOString() };
+  salvar();
+  try {
+    const { html } = gerarSite(lead, r);
+    const arquivos = [{ caminho: "index.html", dados: Buffer.from(html) }, ...decodificarImagens(imagens).map(({ caminho, dados }) => ({ caminho, dados }))];
+    const url = await hostinger.publicarSite(cfgHost(), sub, arquivos, (etapa) => { lead.siteDemo.etapa = etapa; });
+    Object.assign(lead.siteDemo, { status: "pronto", etapa: "pronto", url, publicadoEm: new Date().toISOString() });
+  } catch (e) {
+    console.error("[site]", e);
+    Object.assign(lead.siteDemo, { status: "erro", erro: e.message });
+  } finally {
+    publicando.delete(lead.id); salvarAgora();
+  }
+}
 const csvCampo = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
 // ---------- rotas ----------
@@ -167,8 +231,37 @@ async function api(req, res, url) {
       if ("diasFollowup" in b) db.config.diasFollowup = Math.min(60, Math.max(1, Number(b.diasFollowup) || 3));
       if (b.anthropicKey) db.config.anthropicKey = String(b.anthropicKey).trim();
       if (b.removerChave) db.config.anthropicKey = "";
+      if (b.hostingerToken) db.config.hostingerToken = String(b.hostingerToken).trim();
+      if (b.removerHostinger) db.config.hostingerToken = "";
+      if ("dominioSite" in b) db.config.dominioSite = String(b.dominioSite).trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "") || "pedroprendim.com";
       salvarAgora(); return json(res, 200, configPublica());
     }
+  }
+
+  if (recurso === "hostinger" && id === "testar" && m === "POST") {
+    if (!db.config.hostingerToken) return json(res, 400, { erro: "Cole o token da Hostinger primeiro." });
+    try { return json(res, 200, await hostinger.testarConexao(cfgHost())); }
+    catch (e) { return json(res, 400, { erro: e.message }); }
+  }
+
+  if (recurso === "site" && id) {
+    const lead = db.leads[id];
+    if (!lead) return json(res, 404, { erro: "Lead não encontrado." });
+    if (acao === "padrao" && m === "GET") return json(res, 200, padraoSite(lead));
+    if (acao === "previa" && m === "POST") {
+      const b = await corpo(req);
+      return json(res, 200, { html: gerarSite(lead, limparRespostas(b.respostas, b.imagens)).html });
+    }
+    if (acao === "publicar" && m === "POST") {
+      if (!db.config.hostingerToken) return json(res, 400, { erro: "Configure o token da Hostinger em Configurações." });
+      if (publicando.has(id)) return json(res, 409, { erro: "Este site já está sendo publicado." });
+      const b = await corpo(req);
+      const sub = String(b.respostas?.sub || "").toLowerCase();
+      if (!/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/.test(sub)) return json(res, 400, { erro: "Endereço inválido: use só letras minúsculas e números." });
+      publicarDemo(lead, sub, b.respostas || {}, b.imagens || []);
+      return json(res, 202, lead.siteDemo);
+    }
+    if (!acao && m === "GET") return json(res, 200, lead.siteDemo || null);
   }
 
   if (recurso === "export.json" && m === "GET") {
