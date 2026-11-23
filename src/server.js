@@ -8,7 +8,7 @@ import { rodarBusca, TAMANHOS } from "./scraper.js";
 import { pontuar, temperatura } from "./scoring.js";
 import { mensagemIA, mensagemPronta } from "./ia.js";
 import * as auth from "./auth.js";
-import { gerarSite, perfil, nomeCurto, palavraMarca, slug, semAcento, RAMO_W, GENERICAS, ehRestaurante, destaquesPadrao } from "./site/gerador.js";
+import { gerarSite, perfil, nomeCurto, palavraMarca, slug, semAcento, RAMO_W, GENERICAS, ehRestaurante, destaquesPadrao, modelosDe } from "./site/gerador.js";
 import * as hostinger from "./hostinger.js";
 import { mensagensDoLead } from "./site/mensagens.js";
 import fsSync from "node:fs";
@@ -122,6 +122,7 @@ function padraoSite(lead) {
     servicos: ant.servicos || (ehRestaurante(lead) ? destaquesPadrao(lead) : p.servicos.slice(0, 6)),
     horario: ant.horario || "", sobre: ant.sobre || "",
     cor: ant.cor || "", corPadrao: (() => { const [, , , , pr, ac] = p.paleta; const l = (h) => { const n = parseInt(h.slice(1), 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; }; return l(pr) < 0.12 ? ac : pr; })(),
+    modelos: modelosDe(lead), modelo: ant.modelo || modelosDe(lead)[0].id,
     ramo: p.termo, publicado: lead.siteDemo?.status === "pronto" ? lead.siteDemo.url : "",
   };
 }
@@ -143,7 +144,7 @@ function limparRespostas(r = {}, imagens = [], paraPublicar = false) {
   return {
     nome: t(r.nome, 80), marca: t(r.marca, 20), whatsapp: t(r.whatsapp, 20).replace(/\D/g, ""),
     servicos: (Array.isArray(r.servicos) ? r.servicos : String(r.servicos || "").split("\n")).map((x) => t(x, 60).trim()).filter(Boolean).slice(0, 6),
-    horario: t(r.horario, 200), sobre: t(r.sobre, 600), cor: /^#[0-9a-f]{6}$/i.test(r.cor || "") ? r.cor : "",
+    modelo: t(r.modelo, 30), horario: t(r.horario, 200), sobre: t(r.sobre, 600), cor: /^#[0-9a-f]{6}$/i.test(r.cor || "") ? r.cor : "",
     logo: src("logo"), fotos: ["foto1", "foto2", "foto3", "foto4"].map(src),
   };
 }

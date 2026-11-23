@@ -11,7 +11,7 @@ const F = {
   pizza4: "photo-1585238342024-78d387f4a707", carne: "photo-1600891964092-4316c288032e",
 };
 
-const TIPOS = {
+export const TIPOS = {
   burger: {
     re: /hamburg|burger|lanch|smash|sanduich/, nome: "hamburgueria",
     cores: { bg: "#121010", sup: "#1c1917", txt: "#fff7ed", mut: "#c9bfb4", a1: "#ffb800", a2: "#e23b1e" }, fonte: ["Anton", "DM Sans"], caixaAlta: true,

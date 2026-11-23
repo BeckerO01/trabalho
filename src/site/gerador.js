@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 import { ehRestaurante, renderRestaurante, destaquesPadrao } from "./modelos/restaurante.js";
+import { renderPremium, tipoPremium } from "./modelos/premium3d.js";
 const BASE_REF = fs.readFileSync(path.join(AQUI, "molde-aurora.html"), "utf8");
 const cfg = {};
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -287,7 +288,7 @@ const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.2126 * (n
 const RAMO_W = /^(oficina|mecanica|auto|center|centro|barbearia|barber|shop|pet|petshop|restaurante|pizzaria|hamburgueria|lanchonete|padaria|confeitaria|academia|studio|clinica|consultorio|escritorio|loja|salao|espaco|instituto|odontologia|odonto|estetica|advocacia|advogados|contabilidade|imobiliaria|escola|cursos?|bar|cafe|cafeteria|lavacar|lava|jato|funilaria|eletrica|materiais|construcao|veterinaria|veterinario|farmacia|otica|moda|beleza|saude|bem|estar|e|de|da|do|das|dos|em|the|and)$/;
 function palavraMarca(l) {
   const ramo = new Set(semAcento(`${l.categoria || ""} ${perfil(l).termo}`).split(/[^a-z]+/));
-  const ws = nomeCurto(l).split(/\s+/).filter((w) => /^[\p{L}'&]+$/u.test(w) && !RAMO_W.test(semAcento(w)) && !GENERICAS.test(semAcento(w)) && !ramo.has(semAcento(w)));
+  const ws = nomeCurto(l).split(/\s+/).filter((w) => /^[\p{L}\p{N}'&]+$/u.test(w) && !RAMO_W.test(semAcento(w)) && !GENERICAS.test(semAcento(w)) && !ramo.has(semAcento(w)));
   if (!ws.length) return (nomeCurto(l).split(/\s+/).pop() || "marca").toLowerCase();
   const m = ws[0].length <= 4 && ws[1] ? ws[0] + " " + ws[1] : ws[0];
   return m.toLowerCase().slice(0, 18);
@@ -304,7 +305,21 @@ const H = (s) => esc(s);
 
 function gerarSite(l, r = {}) {
   l = { ...l, ...(r.whatsapp ? { whatsapp: r.whatsapp } : {}) };
-  if (ehRestaurante(l)) {
+  const ehRest = ehRestaurante(l), p0 = perfil(l), tp = tipoPremium(p0.id, ehRest);
+  const modelo = modelosDe(l).some((m) => m.id === r.modelo) ? r.modelo : modelosDe(l)[0].id;
+  if (tp && modelo === tp + "3d") {
+    const o = ondeFica(l), wa = numeroWhats(l.whatsapp || l.telefone), ia = l.siteIA || {};
+    const d = { nome: (r.nome || "").trim() || nomeCurto(l), marca: (r.marca || "").trim() || palavraMarca(l), cidade: o.cidade || "sua cidade", bairro: o.bairro,
+      endereco: l.endereco || "", telefone: telBR(l.telefone), telefoneNum: numeroWhats(l.telefone), instagram: l.instagram || "", mapsUrl: l.mapsUrl || "",
+      nota: l.nota, avaliacoes: l.avaliacoes, horario: r.horario || "", sobre: (r.sobre || "").trim() || ia.sobre || "", cor: /^#[0-9a-f]{6}$/i.test(r.cor || "") ? r.cor : "",
+      logo: r.logo || "", fotos: (r.fotos || []).filter(Boolean), fotoReal: l.foto || "",
+      servicos: (r.servicos || []).filter(Boolean).length ? r.servicos.filter(Boolean) : ehRest ? [] : (ia.servicos?.map((s) => s.nome) || p0.servicos),
+      servDesc: ia.servicos ? Object.fromEntries(ia.servicos.map((s) => [s.nome, s.descricao])) : null,
+      difs: ehRest ? [] : (ia.diferenciais?.map((x) => x.titulo + ": " + x.texto) || p0.difs), faq: ehRest ? [] : (ia.faq?.map((x) => [x.pergunta, x.resposta]) || p0.faq.map((q) => [q, null])),
+      cta: p0.cta, waMsg: p0.waMsg, waL: (msg) => wa ? `https://wa.me/${wa}?text=${encodeURIComponent(msg)}` : "#contato" };
+    return { html: renderPremium(l, d, tp), faltou: [], arquivo: slug(l), modelo };
+  }
+  if (ehRest && modelo === "restaurante") {
     const o = ondeFica(l), wa = numeroWhats(l.whatsapp || l.telefone);
     const d = { nome: (r.nome || "").trim() || nomeCurto(l), marca: (r.marca || "").trim() || palavraMarca(l), cidade: o.cidade || "sua cidade", bairro: o.bairro,
       endereco: l.endereco || "", telefone: telBR(l.telefone), telefoneNum: numeroWhats(l.telefone), instagram: l.instagram || "", mapsUrl: l.mapsUrl || "",
@@ -476,5 +491,16 @@ body:not(.loading) .wa-float{transform:none;opacity:1;transition-delay:1.8s}
   return { html: s, faltou, arquivo: slug(l) };
 }
 
-export { ehRestaurante, destaquesPadrao };
+/** Modelos disponíveis para o lead (o primeiro é o padrão) */
+function modelosDe(l) {
+  const ehRest = ehRestaurante(l), tp = tipoPremium(perfil(l).id, ehRest);
+  const nomes = { restaurante: "Restaurante", academia: "Academia", dentista: "Dentista", clinica: "Clínica" };
+  const objetos = { restaurante: "hambúrguer, pizza, xícara ou tigela em 3D", academia: "haltere 3D girando", dentista: "dente 3D brilhante", clinica: "forma 3D fluida e brilhante" };
+  const lista = [];
+  if (tp) lista.push({ id: tp + "3d", nome: nomes[tp] + " 3D", desc: `Novo: ${objetos[tp]}, animações e efeitos ao rolar.` });
+  if (ehRest) lista.push({ id: "restaurante", nome: "Restaurante clássico", desc: "Foto grande de comida, cardápio e pedido pelo WhatsApp." });
+  lista.push({ id: "aurora", nome: "Editorial", desc: "Tipografia gigante, fundo fluido e rolagem lateral (o primeiro modelo)." });
+  return lista;
+}
+export { ehRestaurante, destaquesPadrao, modelosDe };
 export { gerarSite, perfil, nomeCurto, palavraMarca, ondeFica, slug, numeroWhats, PERFIS, VIVO, semAcento, RAMO_W, GENERICAS };

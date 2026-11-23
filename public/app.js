@@ -507,6 +507,8 @@ const corAtual = () => AS.r?.cor || AS.p?.corPadrao || "#0f7a5c";
 // ---- perguntas ----
 const PASSOS = [
   { id: "inicio" },
+  { id: "modelo", t: () => `Qual <em>modelo</em> de site?`, a: "Cada modelo tem a cara do ramo. Veja ao lado como fica.",
+    html: (r, p) => `<div class="st-escolhas">${(p.modelos || []).map((m, i) => `<button type="button" class="st-esc" data-modelo="${esc(m.id)}" aria-pressed="${(r.modelo || p.modelo) === m.id}" style="${(r.modelo || p.modelo) === m.id ? "border-color:var(--st-cor,#0f7a5c);box-shadow:0 0 0 3px color-mix(in srgb,var(--st-cor,#0f7a5c) 20%,transparent)" : ""}"><kbd>${i + 1}</kbd><span>${esc(m.nome)}<small>${esc(m.desc)}</small></span></button>`).join("")}</div>` },
   { id: "sub", t: (r) => `Qual vai ser o <em>endereço</em> do site?`, a: "Curto e fácil de digitar. Só letras minúsculas e números.",
     html: (r, p) => `<div class="st-sub"><input class="st-in" name="sub" value="${esc(r.sub)}" maxlength="40" autocomplete="off" spellcheck="false"><small>.${esc(p.dominio)}</small></div>`,
     ok: (f) => /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/.test(f.sub) || "Use só letras minúsculas e números, sem espaços nem acentos." },
@@ -536,7 +538,7 @@ async function abrirAssistente(id) {
   if (!S.config.temHostinger) { toast("Configure a Hostinger em Configurações antes de criar sites."); location.hash = "config"; return; }
   AS.lead = l; AS.imgs = {}; AS.i = 0;
   AS.p = await api("GET", `site/${id}/padrao`);
-  AS.r = { sub: AS.p.sub, nome: AS.p.nome, marca: AS.p.marca, whatsapp: AS.p.whatsapp, servicos: AS.p.servicos, horario: AS.p.horario, cor: AS.p.cor, sobre: AS.p.sobre };
+  AS.r = { modelo: AS.p.modelo, sub: AS.p.sub, nome: AS.p.nome, marca: AS.p.marca, whatsapp: AS.p.whatsapp, servicos: AS.p.servicos, horario: AS.p.horario, cor: AS.p.cor, sobre: AS.p.sobre };
   const st = await api("GET", `site/${id}`).catch(() => null);
   montarStudio();
   if (st?.status === "publicando") return mostrarEspera();
@@ -574,13 +576,14 @@ function telaPasso(direcao = 1) {
         <p class="ajuda">${AS.p.publicado ? `Já existe um site no ar (${esc(AS.p.publicado)}); publicar de novo substitui. ` : ""}Já montei tudo com os dados do lead: é o que você vê ao lado. Quer fazer alguma alteração antes de gerar?</p>
         <div class="st-escolhas">
           <button type="button" class="st-esc" data-st="direto"><kbd>1</kbd><span>Não, pode gerar assim<small>Vai direto para a confirmação.</small></span></button>
-          <button type="button" class="st-esc" data-st="ajustar"><kbd>2</kbd><span>Sim, quero ajustar<small>8 perguntas rápidas, todas já preenchidas.</small></span></button>
+          <button type="button" class="st-esc" data-st="ajustar"><kbd>2</kbd><span>Sim, quero ajustar<small>9 perguntas rápidas, todas já preenchidas.</small></span></button>
         </div></div>`;
     } else if (passo.id === "confirmar") {
       const r = AS.r, url = `https://${r.sub}.${AS.p.dominio}`;
       html = `<form class="st-card" id="stForm"><div class="st-num">TUDO PRONTO</div><h2>Publicar o site <em>agora</em>?</h2>
         <p class="ajuda">Confira o resumo. O site fica fora do Google (é uma demonstração).</p>
         <dl class="st-resumo">
+          <div><dt>Modelo</dt><dd>${esc((AS.p.modelos || []).find((m) => m.id === r.modelo)?.nome || "Padrão")}</dd></div>
           <div><dt>Endereço</dt><dd><b>${esc(url)}</b></dd></div>
           <div><dt>Empresa</dt><dd>${esc(r.nome)}</dd></div>
           <div><dt>WhatsApp</dt><dd>${esc(tel(r.whatsapp))}</dd></div>
@@ -600,6 +603,7 @@ function telaPasso(direcao = 1) {
     q.innerHTML = html;
     const foco = q.querySelector("input:not([type=file]):not([type=color]), textarea");
     if (foco) { foco.focus(); if (foco.setSelectionRange && foco.type !== "tel") foco.setSelectionRange(foco.value.length, foco.value.length); }
+    else q.querySelector(".st-ok")?.focus();
   };
   if (old) { old.classList.add("sai"); setTimeout(desenhar, 260); } else desenhar();
 }
@@ -732,6 +736,8 @@ async function publicar() {
 // ---- eventos ----
 document.addEventListener("click", (e) => { const b = e.target.closest("[data-criar-site]"); if (b) { e.stopPropagation(); abrirAssistente(b.dataset.criarSite); } }, true);
 for (const raiz of ["#studio", "#stEspera"]) $(raiz).addEventListener("click", async (e) => {
+  const mod = e.target.closest("[data-modelo]");
+  if (mod) { AS.r.modelo = mod.dataset.modelo; telaPasso(); previa(true); return; }
   const cor = e.target.closest("[data-cor]");
   if (cor) { AS.r.cor = cor.dataset.cor === AS.p.corPadrao ? "" : cor.dataset.cor; document.querySelectorAll(".st-cor").forEach((b) => b.setAttribute("aria-pressed", String(b === cor))); aplicarCor(); previa(); return; }
   const a = e.target.closest("[data-st]")?.dataset.st; if (!a) return;
