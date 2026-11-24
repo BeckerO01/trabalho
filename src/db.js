@@ -109,9 +109,21 @@ export function copiaDoBanco() {
   return dados;
 }
 
+/** Token da Hostinger num arquivo de texto (TOKEN-HOSTINGER.txt na pasta do programa ou em ~/RadarDeLeads).
+ *  Ao ler, guarda no banco: atualizar o programa depois não perde o token. */
+function lerTokenDoArquivo() {
+  for (const f of [path.resolve(import.meta.dirname, "..", "TOKEN-HOSTINGER.txt"), path.join(DIR, "TOKEN-HOSTINGER.txt")]) {
+    try {
+      const tok = fs.readFileSync(f, "utf8").split(/\r?\n/).map((x) => x.trim()).find((x) => x && !x.startsWith("#"));
+      if (tok && tok !== db.config.hostingerToken) { db.config.hostingerToken = tok; salvarAgora(); console.log("  Token da Hostinger lido de " + f); }
+    } catch {}
+  }
+}
+
 carregar();
 migrarJson();
 for (const [k, v] of Object.entries(PADRAO)) if (!db.config[k]) db.config[k] = v;
+lerTokenDoArquivo();
 backupDiario();
 setInterval(backupDiario, 6 * 3600e3).unref();
 

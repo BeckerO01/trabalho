@@ -1,0 +1,4 @@
+# Cole o token da API da Hostinger na linha de baixo, salve e abra o Radar de novo.
+# Onde pegar: hPanel > (foto do perfil) > Conta > API > Gerar token.
+# O programa guarda o token no banco (~/RadarDeLeads), então atualizar o programa não perde ele.
+

@@ -115,7 +115,7 @@ function sorriso() {
   gengiva.scale.y = 0.9; g.add(gengiva);
   // alinhador transparente que desce sobre os dentes
   const pts2 = pts.map((p) => p.clone().setY(0.2));
-  const alinhador = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts2), 120, 0.26, 24, false), fis({ color: 0xffffff, transmission: 1, thickness: 0.25, roughness: 0.12, ior: 1.45, clearcoat: 1, transparent: true, opacity: 0.9, attenuationColor: C(cfg.a1), attenuationDistance: 4 }));
+  const alinhador = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts2), 120, 0.26, 24, false), fis({ color: C(cfg.a2 || "#e8f8ff"), roughness: 0.05, clearcoat: 1, transparent: true, opacity: 0.3, depthWrite: false, envMapIntensity: 1.6 }));
   alinhador.scale.set(1.04, 1.25, 1.04); g.add(alinhador);
   // brilho em estrela que pisca nos dentes da frente
   const estrela = new THREE.Group();
@@ -139,23 +139,23 @@ function sorriso() {
     // o alinhador paira em cima e encaixa conforme rola (ou sozinho, a cada ciclo)
     const ciclo = reduz ? 0 : suave(Math.sin(t * 0.55) * 1.4 - 0.2);
     const desce = Math.max(rol * 1.6, ciclo);
-    alinhador.position.y = 1.5 * (1 - suave(desce)) + (1 - monta) * 3;
-    alinhador.material.opacity = 0.9 * monta;
+    alinhador.position.y = 0.9 * (1 - suave(desce)) + (1 - monta) * 3;
+    alinhador.material.opacity = 0.3 * monta * (0.35 + 0.65 * suave(desce));
     const pisca = Math.max(0, Math.sin(t * 1.7)) ** 12;
     estrela.scale.setScalar(0.2 + pisca * 1.2); estrela.rotation.z = t * 0.8; raio.opacity = pisca * monta;
     pontos.rotation.y = -t * 0.06;
   });
-  g.rotation.x = 0.5; g.position.y = 0.1; g.scale.setScalar(1.25);
+  g.rotation.x = 0.42; g.position.y = 0.05; g.scale.setScalar(0.92);
   return g;
 }
 
 // ---------- clínica: frasco de sérum de vidro com conta-gotas que pinga ----------
 function serum() {
   const g = new THREE.Group();
-  const vidro = fis({ color: 0xffffff, transmission: 1, thickness: 0.5, roughness: 0.04, ior: 1.5, clearcoat: 1, attenuationColor: C(cfg.a2 || "#fff3ee"), attenuationDistance: 2 });
+  const vidro = fis({ color: 0xffffff, roughness: 0.03, clearcoat: 1, transparent: true, opacity: 0.22, depthWrite: false, envMapIntensity: 2.2, side: THREE.DoubleSide });
   const V = (a) => a.map(([x, y]) => new THREE.Vector2(x, y));
   g.add(new THREE.Mesh(new THREE.LatheGeometry(V([[0, -1.3], [0.68, -1.3], [0.78, -1.24], [0.82, -1.1], [0.82, 0.3], [0.78, 0.5], [0.6, 0.68], [0.36, 0.78], [0.31, 0.9], [0.31, 1.02], [0.27, 1.02], [0.27, 0.9], [0.32, 0.78], [0.56, 0.66], [0.74, 0.48], [0.77, 0.3], [0.77, -1.1], [0.74, -1.2], [0, -1.2]]), 96), vidro));
-  const liq = fis({ color: C(cfg.a1), transmission: 0.55, thickness: 1.2, roughness: 0.08, ior: 1.36, clearcoat: 1, attenuationColor: C(cfg.a1), attenuationDistance: 1.2 });
+  const liq = fis({ color: C(cfg.a1), roughness: 0.12, clearcoat: 1, transparent: true, opacity: 0.85, sheen: 0.6, sheenColor: C("#ffffff") });
   const liquido = new THREE.Mesh(new THREE.LatheGeometry(V([[0, -1.19], [0.72, -1.19], [0.755, -1.1], [0.755, 0], [0, 0]]), 64), liq);
   g.add(liquido);
   // bolhinhas subindo dentro do líquido
@@ -165,9 +165,9 @@ function serum() {
   const tampa = new THREE.Group(); g.add(tampa);
   const ouro = std({ color: 0xd8b27a, metalness: 1, roughness: 0.22 });
   const anel = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.34, 64), ouro); anel.position.y = 1.12; tampa.add(anel);
-  const borr = fis({ color: C(cfg.a1), roughness: 0.4, sheen: 1, sheenColor: C("#ffffff") });
+  const borr = fis({ color: C(cfg.a1).lerp(C("#ffffff"), 0.15), roughness: 0.45, clearcoat: 0.4, sheen: 0.5, sheenColor: C("#ffffff"), emissive: C(cfg.a1), emissiveIntensity: 0.15 });
   const bulbo = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.42, 16, 40), borr); bulbo.position.y = 1.62; tampa.add(bulbo);
-  const pipeta = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.04, 1.95, 24), fis({ color: 0xffffff, transmission: 1, thickness: 0.1, roughness: 0.05, ior: 1.5 })); pipeta.position.y = -0.02; tampa.add(pipeta);
+  const pipeta = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.04, 1.95, 24), fis({ color: 0xffffff, roughness: 0.05, clearcoat: 1, transparent: true, opacity: 0.35, depthWrite: false })); pipeta.position.y = -0.02; tampa.add(pipeta);
   const ponta = new THREE.Vector3(0, -1.0, 0);
   // gotas e ondas no "chão"
   const gotaGeo = new THREE.SphereGeometry(0.075, 24, 16), gotas = [];
@@ -210,7 +210,7 @@ function serum() {
     liquido.rotation.y = t * 0.2; liquido.position.y = Math.sin(t * 2.1) * 0.004;
     orbita.rotation.y = t * 0.35;
   });
-  g.position.y = -0.15; g.scale.setScalar(1.05);
+  g.position.y = -0.35; g.scale.setScalar(0.8);
   return g;
 }
 
