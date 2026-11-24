@@ -112,7 +112,10 @@ function animarInicio() {
     const nome = S.config.apelido || (S.config.nome || "").split(" ")[0] || "";
     const txt = `Olá, ${nome}!`; let i = 0;
     const passo = () => { i++; const t = txt.slice(0, i); ola.innerHTML = t.replace(nome, `<em>${esc(nome)}</em>`).replace(/<em>([^<]*)$/, "<em>$1</em>") + '<span class="cursor-dig"></span>'; if (i < txt.length) setTimeout(passo, 55 + Math.random() * 45); else setTimeout(() => { ola.innerHTML = `Olá, <em>${esc(nome)}</em>!`; }, 900); };
-    setTimeout(passo, 350);
+    const comecar = () => { setTimeout(passo, 350); contar(); };
+    (window.__entrada || Promise.resolve()).then(comecar);
+  }
+  function contar() {
     document.querySelectorAll("[data-contar]").forEach((el) => {
       const fim = Number(el.dataset.contar) || 0, t0 = performance.now();
       const anda = (t) => { const p = Math.min(1, (t - t0) / 1100), e = 1 - Math.pow(1 - p, 3); el.textContent = Math.round(fim * e); if (p < 1) requestAnimationFrame(anda); };

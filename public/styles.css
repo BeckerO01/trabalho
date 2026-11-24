@@ -361,3 +361,45 @@ td .sub { font-size: 12px; color: var(--muted); }
 .site-num { display: flex; gap: 18px; font-size: 13px; color: var(--muted); }
 .site-num b { font: 700 22px var(--f-display); color: var(--ink); margin-right: 4px; }
 @media (prefers-reduced-motion: reduce) { .anim, #view.entra, .boas-frase, .boas-resumo, .boas .acoes { animation: none !important; } }
+
+/* ---------- entrada animada do app ---------- */
+.entrada { position: fixed; inset: 0; z-index: 9999; display: grid; place-content: center; justify-items: center; gap: 18px; background: radial-gradient(circle at 50% 42%, #f3faf7 0, #fff 60%); cursor: pointer; transition: opacity .7s ease .15s, visibility 0s linear .9s; }
+.en-radar { position: relative; width: min(240px, 56vw); aspect-ratio: 1; border-radius: 50%; animation: enSurge .9s cubic-bezier(.2, .9, .25, 1.2) both; transition: transform .8s cubic-bezier(.7, 0, .3, 1), opacity .6s ease .2s; }
+.en-anel { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--accent) 28%, transparent); }
+.en-anel.a2 { inset: 17%; } .en-anel.a3 { inset: 34%; }
+.en-anel.a1::after { content: ""; position: absolute; inset: -1.5px; border-radius: 50%; border: 2px solid var(--accent); animation: enOnda 2s ease-out .3s infinite; }
+.en-cruz { position: absolute; inset: 0; background: linear-gradient(var(--line), var(--line)) center/1px 100% no-repeat, linear-gradient(var(--line), var(--line)) center/100% 1px no-repeat; border-radius: 50%; opacity: .7; }
+.en-varre { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 290deg, color-mix(in srgb, var(--accent) 10%, transparent) 300deg, color-mix(in srgb, var(--accent) 55%, transparent) 359deg, transparent 360deg); animation: enGira 1.6s linear infinite; }
+.en-centro { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 18%, transparent); }
+.en-ping { position: absolute; left: var(--x); top: var(--y); width: 10px; height: 10px; margin: -5px; border-radius: 50%; background: var(--hot); opacity: 0; animation: enPing .6s cubic-bezier(.2, 1.4, .4, 1) var(--d) both; }
+.en-ping::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--hot); animation: enOnda 1.4s ease-out calc(var(--d) + .1s) infinite; }
+.en-titulo { font: 700 clamp(30px, 5vw, 46px)/1 var(--f-display); letter-spacing: -.02em; display: flex; overflow: hidden; padding: 4px 2px 6px; }
+.en-titulo span { display: inline-block; animation: enLetra .7s cubic-bezier(.2, .9, .25, 1.15) both; }
+.en-titulo .sp { width: .28em; }
+.en-titulo span:nth-child(n+10) { color: var(--accent); }
+.en-titulo span:nth-child(1) { animation-delay: .35s } .en-titulo span:nth-child(2) { animation-delay: .39s } .en-titulo span:nth-child(3) { animation-delay: .43s } .en-titulo span:nth-child(4) { animation-delay: .47s } .en-titulo span:nth-child(5) { animation-delay: .51s }
+.en-titulo span:nth-child(7) { animation-delay: .57s } .en-titulo span:nth-child(8) { animation-delay: .61s } .en-titulo span:nth-child(10) { animation-delay: .67s } .en-titulo span:nth-child(11) { animation-delay: .71s } .en-titulo span:nth-child(12) { animation-delay: .75s } .en-titulo span:nth-child(13) { animation-delay: .79s } .en-titulo span:nth-child(14) { animation-delay: .83s }
+.en-sub { margin: 0; color: var(--muted); font: 500 13px var(--f-mono); animation: enSobe .6s ease .9s both; transition: opacity .25s, transform .25s; }
+.en-sub.troca { opacity: 0; transform: translateY(-6px); }
+.en-barra { width: 180px; height: 3px; border-radius: 3px; background: var(--sunk); overflow: hidden; animation: enSobe .6s ease 1s both; }
+.en-barra i { display: block; height: 100%; background: var(--accent); border-radius: inherit; animation: enCarga 1.9s cubic-bezier(.6, 0, .2, 1) .9s both; }
+/* saída: radar avança na direção da tela e o app aparece por trás */
+.entrou .entrada { opacity: 0; visibility: hidden; pointer-events: none; }
+.entrou .en-radar { transform: scale(7); opacity: 0; }
+.entrou .en-titulo, .entrou .en-sub, .entrou .en-barra { transition: opacity .3s, transform .5s; opacity: 0; transform: translateY(-14px); }
+body:not(.entrou) .app { opacity: 0; transform: scale(.97); filter: blur(6px); }
+.app { transition: opacity .8s ease .25s, transform 1s cubic-bezier(.2, .8, .2, 1) .25s, filter .8s ease .25s; }
+.entrou .side .brand { animation: enLado .6s cubic-bezier(.2, .8, .2, 1) .35s both; }
+.entrou .side nav > * { animation: enLado .5s cubic-bezier(.2, .8, .2, 1) both; }
+.entrou .side nav > :nth-child(1) { animation-delay: .4s } .entrou .side nav > :nth-child(2) { animation-delay: .44s } .entrou .side nav > :nth-child(3) { animation-delay: .48s } .entrou .side nav > :nth-child(4) { animation-delay: .52s } .entrou .side nav > :nth-child(5) { animation-delay: .56s } .entrou .side nav > :nth-child(6) { animation-delay: .6s } .entrou .side nav > :nth-child(7) { animation-delay: .64s } .entrou .side nav > :nth-child(8) { animation-delay: .68s } .entrou .side nav > :nth-child(9) { animation-delay: .72s } .entrou .side nav > :nth-child(10) { animation-delay: .76s } .entrou .side nav > :nth-child(11) { animation-delay: .8s }
+.entrou .topbar { animation: enDesce .6s cubic-bezier(.2, .8, .2, 1) .45s both; }
+@keyframes enSurge { from { transform: scale(.3) rotate(-40deg); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes enGira { to { transform: rotate(360deg) } }
+@keyframes enOnda { from { transform: scale(1); opacity: .8 } to { transform: scale(1.9); opacity: 0 } }
+@keyframes enPing { from { transform: scale(0); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+@keyframes enLetra { from { transform: translateY(110%) rotate(8deg); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes enSobe { from { transform: translateY(10px); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes enCarga { from { width: 0 } to { width: 100% } }
+@keyframes enLado { from { transform: translateX(-18px); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes enDesce { from { transform: translateY(-14px); opacity: 0 } to { transform: none; opacity: 1 } }
+@media (prefers-reduced-motion: reduce) { .entrada *, .entrada *::after { animation-duration: .01s !important; animation-delay: 0s !important; } .app { transition: none; } }

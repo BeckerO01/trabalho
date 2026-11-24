@@ -8,6 +8,35 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div class="entrada" id="entrada" aria-hidden="true">
+    <div class="en-radar">
+      <i class="en-anel a1"></i><i class="en-anel a2"></i><i class="en-anel a3"></i>
+      <i class="en-cruz"></i><i class="en-varre"></i>
+      <b class="en-ping" style="--x:68%;--y:30%;--d:.55s"></b><b class="en-ping" style="--x:28%;--y:62%;--d:.95s"></b>
+      <b class="en-ping" style="--x:74%;--y:70%;--d:1.3s"></b><b class="en-ping" style="--x:38%;--y:24%;--d:1.65s"></b>
+      <b class="en-ping" style="--x:58%;--y:52%;--d:1.95s"></b>
+      <i class="en-centro"></i>
+    </div>
+    <h1 class="en-titulo"><span>R</span><span>a</span><span>d</span><span>a</span><span>r</span><span class="sp"> </span><span>d</span><span>e</span><span class="sp"> </span><span>L</span><span>e</span><span>a</span><span>d</span><span>s</span></h1>
+    <p class="en-sub" id="enSub">Procurando negócios sem site…</p>
+    <div class="en-barra"><i></i></div>
+  </div>
+  <script>
+    // entrada animada: some sozinha em ~2,8s (ou ao clicar); o resto do app espera por window.__entrada
+    window.__entrada = new Promise((ok) => {
+      const t0 = Date.now(), rapido = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      let feito = false;
+      const sair = () => {
+        if (feito) return; feito = true;
+        document.body.classList.add("entrou");
+        setTimeout(ok, rapido ? 0 : 450);
+        setTimeout(() => document.getElementById("entrada")?.remove(), 1200);
+      };
+      setTimeout(() => { const s = document.getElementById("enSub"); if (s) { s.classList.add("troca"); setTimeout(() => (s.textContent = "Tudo pronto. Bora vender!", s.classList.remove("troca")), 250); } }, rapido ? 0 : 1700);
+      addEventListener("load", () => setTimeout(sair, Math.max(0, (rapido ? 300 : 2800) - (Date.now() - t0))));
+      document.getElementById("entrada").addEventListener("click", sair);
+    });
+  </script>
   <div class="app">
     <aside class="side" id="side">
       <a class="brand" href="#inicio"><span class="radar" aria-hidden="true"></span><span><strong>Radar de Leads</strong><small>do Google Maps</small></span></a>
