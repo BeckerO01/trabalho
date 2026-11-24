@@ -23,7 +23,7 @@ const TIPOS = {
     planos: [["Mensal", "Para começar agora", ["Musculação completa", "Avaliação física", "Treino montado"]], ["Trimestral", "O mais escolhido", ["Tudo do mensal", "Reavaliação a cada mês", "Melhor custo por mês"]], ["Anual", "Para quem é de verdade", ["Tudo do trimestral", "Menor valor por mês", "Prioridade nas aulas"]]],
   },
   dentista: {
-    objeto: "sorriso", escuro: false, rotulo: "clínica odontológica",
+    objeto: "", escuro: false, rotulo: "clínica odontológica",
     cores: { bg: "#ffffff", sup: "#f1f7fb", txt: "#0d2230", mut: "#5d7180", a1: "#1497c4", a2: "#e8f8ff" },
     fontes: ["Plus Jakarta Sans", "Inter"], fontesUrl: "family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600", caixaAlta: false,
     titulo: ["Seu sorriso", "merece", "cuidado de verdade."], destaque: 2,
@@ -32,7 +32,7 @@ const TIPOS = {
     passos: [["Agende a avaliação", "Pelo WhatsApp, no horário que fica melhor para você."], ["Exame e conversa", "Examinamos com calma e explicamos tudo, sem pressa."], ["Plano de tratamento", "Você recebe o plano e as opções antes de começar."]],
   },
   clinica: {
-    objeto: "serum", escuro: false, rotulo: "clínica",
+    objeto: "", escuro: false, rotulo: "clínica",
     cores: { bg: "#fffaf7", sup: "#f6ece6", txt: "#2a1e1a", mut: "#7a6a63", a1: "#b9785f", a2: "#fff3ee" },
     fontes: ["Cormorant Garamond", "Jost"], fontesUrl: "family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@400;500;600", caixaAlta: false,
     titulo: ["Beleza que", "realça", "quem você é."], destaque: 1,
@@ -43,7 +43,7 @@ const TIPOS = {
 };
 // hambúrguer 3D real (escaneado), hospedado uma vez em pedroprendim.com/3d com CORS liberado; cópia em ./3d/burger.glb
 export const GLB_BURGER = "https://pedroprendim.com/3d/burger.glb";
-const OBJ_REST = { burger: "burger", pizza: "pizza", padaria: "xicara", japones: "tigela", geral: "tigela" };
+const OBJ_REST = { burger: "burger" }; // só o hambúrguer tem 3D; os outros usam foto
 
 /** Tipo premium do lead (ou null) */
 export function tipoPremium(perfilId, ehRest) {
@@ -54,12 +54,15 @@ export function tipoPremium(perfilId, ehRest) {
   return null;
 }
 
+// paralaxe leve das fotos do topo (modelos sem 3D)
+const PARALAXE = `<script>(function(){if(matchMedia("(prefers-reduced-motion: reduce)").matches||matchMedia("(pointer: coarse)").matches)return;var els=[].slice.call(document.querySelectorAll(".palco [data-px]")),x=0,y=0,sx=0,sy=0;addEventListener("pointermove",function(e){x=e.clientX/innerWidth-.5;y=e.clientY/innerHeight-.5},{passive:true});(function f(){sx+=(x-sx)*.06;sy+=(y-sy)*.06;var r=Math.min(1,scrollY/innerHeight);els.forEach(function(el){var k=+el.dataset.px;el.style.translate=(sx*k).toFixed(1)+"px "+(sy*k-r*k*3).toFixed(1)+"px"});requestAnimationFrame(f)})()})()</script>`;
+
 export function renderPremium(l, d, tipoId) {
   const H = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   let t, fotos;
   if (tipoId === "restaurante") {
     const sub = tipoRestaurante(l), r = TIPOS_REST[sub];
-    t = { objeto: OBJ_REST[sub] || "tigela", escuro: true, rotulo: r.nome, cores: { ...r.cores, bg: "#100d0b", sup: "#1b1612" }, fontes: r.fonte,
+    t = { objeto: OBJ_REST[sub] || "", escuro: true, rotulo: r.nome, cores: { ...r.cores, bg: "#100d0b", sup: "#1b1612", txt: "#fff7ed", mut: "#c9bfb4" }, fontes: r.fonte,
       fontesUrl: `family=${r.fonte[0].replace(/ /g, "+")}:wght@400;700&family=${r.fonte[1].replace(/ /g, "+")}:wght@400;500;700`, caixaAlta: r.caixaAlta,
       titulo: r.titulo(d.nome, d.bairro || d.cidade)[0].replace(/\.$/, "").split(" ").reduce((a, w, i, arr) => { const k = Math.min(2, Math.floor(i / Math.ceil(arr.length / 3))); (a[k] = a[k] || []).push(w); return a; }, []).map((x, i, all) => x.join(" ") + (i === all.length - 1 ? "." : "")), destaque: 1,
       sub: () => `${d.nome}${d.bairro ? ", no " + d.bairro : ""}. ${r.titulo(d.nome, d.bairro || d.cidade)[1]}`, faixa: r.faixa, cardapio: r.cardapio,
@@ -88,6 +91,7 @@ export function renderPremium(l, d, tipoId) {
   const mapa = `https://www.google.com/maps?q=${encodeURIComponent(d.endereco || `${d.nome} ${d.cidade}`)}&z=16&output=embed`;
   const horario = (d.horario || "").trim();
   const sobre = d.sobre || `${d.nome} é ${t.rotulo === "academia" ? "uma academia" : "um" + (/^[aeiou]/.test(t.rotulo) ? "a " : " ") + t.rotulo} ${d.bairro ? "no bairro " + d.bairro + ", em " + d.cidade : "em " + d.cidade}. A gente acredita que atendimento bom é atendimento próximo: cada pessoa recebe atenção, explicação clara e um cuidado feito para ela.`;
+  const tem3d = Boolean(t.objeto);
   const cfg3d = JSON.stringify({ objeto: t.objeto, a1: c.a1, a2: c.a2, glb: t.objeto === "burger" ? GLB_BURGER : "" }).replace(/</g, "\\u003c");
   const ICONES = ["M4 12h16M12 4v16", "M5 12l4 4L19 6", "M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z", "M3 12a9 9 0 1 0 18 0 9 9 0 1 0-18 0M12 7v5l3 2", "M4 20V10l8-6 8 6v10H4z", "M12 21s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.5-7 10-7 10z"];
 
@@ -162,6 +166,18 @@ a{color:inherit;text-decoration:none} img{display:block;max-width:100%}
 .com3d .palco canvas{opacity:1}
 .palco .reserva{position:absolute;inset:8%;border-radius:40% 60% 55% 45%/50% 45% 55% 50%;background:url("${H(foto(0))}") center/cover;display:none}
 .sem3d .palco .reserva{display:block}
+/* hero com foto (sem 3D): moldura em arco, revelação de baixo pra cima, zoom lento e paralaxe no mouse */
+.palco.foto{display:grid;place-items:center}
+.palco .moldura{position:relative;width:min(100%,520px);height:92%;border-radius:999px 999px 32px 32px;overflow:hidden;box-shadow:0 40px 80px -40px rgba(10,30,40,.45);clip-path:inset(100% 0 0 0 round 999px 999px 32px 32px);transition:clip-path 1.3s cubic-bezier(.7,0,.2,1) .2s}
+.pronto .palco .moldura{clip-path:inset(0 0 0 0 round 999px 999px 32px 32px)}
+.palco .moldura img{width:100%;height:100%;object-fit:cover;transform:scale(1.25);transition:transform 2.2s cubic-bezier(.2,.8,.2,1) .2s}
+.pronto .palco .moldura img{transform:scale(1.04);animation:kb 18s ease-in-out 2.4s infinite alternate}
+@keyframes kb{to{transform:scale(1.14) translate(-2%,-1%)}}
+.palco .mini{position:absolute;left:-4%;bottom:8%;width:34%;aspect-ratio:1;border-radius:50%;overflow:hidden;border:6px solid var(--bg);box-shadow:0 24px 50px -24px rgba(0,0,0,.4);transform:scale(0);transition:transform .9s cubic-bezier(.2,1.3,.4,1) 1.1s;z-index:3}
+.pronto .palco .mini{transform:scale(1)}
+.palco .mini img{width:100%;height:100%;object-fit:cover}
+.palco .aro{position:absolute;width:min(100%,560px);height:96%;border:1px solid var(--a1);border-radius:999px 999px 36px 36px;opacity:.35;transform:translate(14px,14px)}
+.palco [data-px]{will-change:transform}
 .palco .chip{position:absolute;z-index:2;padding:12px 16px;border-radius:16px;font-size:13px;background:${t.escuro ? "rgba(255,255,255,.08)" : "rgba(255,255,255,.75)"};border:1px solid var(--linha);backdrop-filter:blur(12px);box-shadow:0 20px 40px -24px rgba(0,0,0,.4);animation:boia 5s ease-in-out infinite}
 .palco .chip b{display:block;font:700 18px var(--tit);color:var(--txt)}
 .palco .c1{left:2%;top:18%}.palco .c2{right:4%;bottom:16%;animation-delay:-2.5s}
@@ -275,7 +291,7 @@ footer .logo{color:var(--txt)}
 @media(max-width:640px){.wa{display:none}.barra{display:flex;position:fixed;left:12px;right:12px;bottom:12px;z-index:70;justify-content:center;gap:10px;background:#25d366;color:#fff;border-radius:99px;padding:15px;font-weight:700;box-shadow:0 14px 30px -10px rgba(0,0,0,.5)}.barra svg{width:22px;height:22px}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.rev,.fade{opacity:1;transform:none}.hero h1 .ln>span{transform:none}.carga{display:none}}
 </style>
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+${tem3d ? `<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>` : ""}
 </head>
 <body>
 <div class="carga" id="carga" aria-hidden="true"><b>${[...(d.marca || d.nome)].map((ch, i) => `<span style="animation-delay:${(i * 0.035).toFixed(3)}s">${ch === " " ? "&nbsp;" : tt(ch)}</span>`).join("")}</b><i></i></div>
@@ -294,8 +310,8 @@ footer .logo{color:var(--txt)}
     <div class="acoes fade"><a class="btn btn-1 magnet" href="${H(pedir())}" target="_blank" rel="noopener">${WA}<span>${H(d.cta)}</span></a><a class="btn btn-2 magnet" href="#servicos"><span>${t.cardapio ? "Ver destaques" : "Conhecer"}</span></a></div>
     ${temNota ? `<div class="selo fade"><b>${nota}</b><span><strong>★★★★★</strong>${Number(d.avaliacoes).toLocaleString("pt-BR")} avaliações no Google</span></div>` : ""}
   </div>
-  <div class="palco" aria-hidden="true">
-    <canvas id="o3d"></canvas><div class="reserva"></div>
+  <div class="palco${tem3d ? "" : " foto"}" aria-hidden="true">
+    ${tem3d ? `<canvas id="o3d"></canvas><div class="reserva"></div>` : `<div class="aro" data-px="-10"></div><div class="moldura" data-px="14"><img src="${H(foto(0))}" alt="" fetchpriority="high"></div><div class="mini" data-px="26"><img src="${H(foto(1))}" alt="" loading="lazy"></div>`}
     <div class="chip c1"><b>${temNota ? nota + " ★" : "WhatsApp"}</b>${temNota ? "no Google" : "resposta rápida"}</div>
     <div class="chip c2"><b>${H(d.bairro || d.cidade)}</b>${H(d.cidade)}</div>
   </div>
@@ -362,9 +378,9 @@ ${faq.length ? `<section id="duvidas" style="padding-top:0"><div class="cab rev"
 <footer><a href="#inicio" class="logo"><i></i>${tt(d.marca || d.nome)}</a><span>© ${new Date().getFullYear()} ${H(d.nome)}</span></footer>
 <a class="wa magnet" href="${H(pedir())}" target="_blank" rel="noopener" aria-label="Chamar no WhatsApp">${WA}</a>
 <a class="barra" href="${H(pedir())}" target="_blank" rel="noopener">${WA} ${H(d.cta)}</a>
-<script type="application/json" id="cfg3d">${cfg3d}</script>
+${tem3d ? `<script type="application/json" id="cfg3d">${cfg3d}</script>` : ""}
 <script>${INTERACOES}</script>
-<script type="module">${MOTOR_3D}</script>
+${tem3d ? `<script type="module">${MOTOR_3D}</script>` : PARALAXE}
 </body>
 </html>`;
 }

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
-import { ehRestaurante, renderRestaurante, destaquesPadrao } from "./modelos/restaurante.js";
+import { ehRestaurante, renderRestaurante, destaquesPadrao, tipoRestaurante } from "./modelos/restaurante.js";
 import { renderPremium, tipoPremium } from "./modelos/premium3d.js";
 const BASE_REF = fs.readFileSync(path.join(AQUI, "molde-aurora.html"), "utf8");
 const cfg = {};
@@ -507,10 +507,16 @@ body:not(.loading) .wa-float{transform:none;opacity:1;transition-delay:1.8s}
 /** Modelos disponíveis para o lead (o primeiro é o padrão) */
 function modelosDe(l) {
   const ehRest = ehRestaurante(l), tp = tipoPremium(perfil(l).id, ehRest);
-  const nomes = { restaurante: "Restaurante", academia: "Academia", dentista: "Dentista", clinica: "Clínica" };
-  const objetos = { restaurante: "hambúrguer, pizza, xícara ou tigela em 3D", academia: "haltere 3D girando", dentista: "dente 3D brilhante", clinica: "forma 3D fluida e brilhante" };
+  // 3D só na academia e no hambúrguer; os outros premium usam foto grande no topo
+  const burger = ehRest && tipoRestaurante(l) === "burger";
+  const info = {
+    restaurante: burger ? ["Hamburgueria 3D", "Novo: hambúrguer 3D de verdade, animações e efeitos ao rolar."] : ["Restaurante premium", "Novo: foto grande em moldura, animações e efeitos ao rolar."],
+    academia: ["Academia 3D", "Novo: haltere 3D, animações e efeitos ao rolar."],
+    dentista: ["Dentista premium", "Novo: foto grande em moldura, animações e efeitos ao rolar."],
+    clinica: ["Clínica premium", "Novo: foto grande em moldura, animações e efeitos ao rolar."],
+  };
   const lista = [];
-  if (tp) lista.push({ id: tp + "3d", nome: nomes[tp] + " 3D", desc: `Novo: ${objetos[tp]}, animações e efeitos ao rolar.` });
+  if (tp) lista.push({ id: tp + "3d", nome: info[tp][0], desc: info[tp][1] });
   if (ehRest) lista.push({ id: "restaurante", nome: "Restaurante clássico", desc: "Foto grande de comida, cardápio e pedido pelo WhatsApp." });
   lista.push({ id: "aurora", nome: "Editorial", desc: "Tipografia gigante, fundo fluido e rolagem lateral (o primeiro modelo)." });
   return lista;
