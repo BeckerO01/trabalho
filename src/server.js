@@ -102,6 +102,21 @@ const resumoBusca = (b) => {
   };
 };
 const configPublica = () => ({ ...db.config, avisos: undefined, pastaDados: PASTA_DADOS, anthropicKey: undefined, hostingerToken: undefined, temHostinger: Boolean(db.config.hostingerToken), dominioSite: db.config.dominioSite || "pedroprendim.com", login: auth.ATIVO, temChave: Boolean(process.env.ANTHROPIC_API_KEY || db.config.anthropicKey) });
+// ---------- vendas ----------
+function limparVenda(v = {}, ant = {}) {
+  const n = (x, d = 0) => { const k = Number(String(x ?? "").replace(/\./g, "").replace(",", ".")); return Number.isFinite(k) && k >= 0 ? Math.round(k * 100) / 100 : d; };
+  const t = (x, k) => String(x ?? "").slice(0, k);
+  const dia = (x) => (/^\d{4}-\d{2}-\d{2}$/.test(x || "") ? x : "");
+  return {
+    valor: n(v.valor, ant.valor || 0), parcelas: Math.min(24, Math.max(1, Math.round(n(v.parcelas, 1)))),
+    pagamento: ["pix", "cartao", "boleto", "dinheiro", "transferencia"].includes(v.pagamento) ? v.pagamento : "pix",
+    data: dia(v.data) || ant.data || new Date().toISOString().slice(0, 10),
+    mensalidade: Boolean(v.mensalidade), valorMensal: v.mensalidade ? n(v.valorMensal) : 0, servicoMensal: t(v.servicoMensal, 120),
+    mensalAtiva: v.mensalidade ? v.mensalAtiva !== false : false, mensalFim: dia(v.mensalFim),
+    alteracoes: t(v.alteracoes, 2000), alteracoesFeitas: Boolean(v.alteracoesFeitas), obs: t(v.obs, 1000),
+    pago: Boolean(v.pago), dominioProprio: t(v.dominioProprio, 120),
+  };
+}
 // ---------- site de demonstração ----------
 // endereço curto: só as palavras que identificam a empresa (sem "clínica", "estética", "de"...)
 function subPadrao(lead) {
@@ -151,7 +166,12 @@ function limparRespostas(r = {}, imagens = [], paraPublicar = false) {
 async function publicarDemo(lead, sub, respostas, imagens) {
   publicando.add(lead.id);
   const r = limparRespostas(respostas, imagens, true);
-  lead.siteDemo = { status: "publicando", etapa: "gerando", sub, url: `https://${sub}.${cfgHost().dominio}/`, respostas: { ...r, logo: "", fotos: [] }, inicio: new Date().toISOString() };
+  // imagens já enviadas antes continuam no servidor: reaproveita se não veio uma nova
+  const ehArquivo = (x) => typeof x === "string" && /^(logo|foto[1-4])\.(jpg|png|webp|svg)$/.test(x);
+  if (!r.logo && ehArquivo(respostas.logo)) r.logo = respostas.logo;
+  r.fotos = r.fotos.map((f, i) => f || (ehArquivo(respostas.fotos?.[i]) ? respostas.fotos[i] : ""));
+  const antes = lead.siteDemo?.sub === sub && lead.siteDemo.status === "pronto" ? lead.siteDemo : null;
+  lead.siteDemo = { status: "publicando", etapa: "gerando", sub, url: `https://${sub}.${cfgHost().dominio}/`, respostas: r, inicio: new Date().toISOString() };
   salvar();
   try {
     const { html } = gerarSite(lead, r);
@@ -162,7 +182,9 @@ async function publicarDemo(lead, sub, respostas, imagens) {
       ...decodificarImagens(imagens).map(({ caminho, dados }) => ({ caminho, dados })),
     ];
     const url = await hostinger.publicarSite(cfgHost(), sub, arquivos, (etapa) => { lead.siteDemo.etapa = etapa; });
-    Object.assign(lead.siteDemo, { status: "pronto", etapa: "pronto", url, publicadoEm: new Date().toISOString(), visitas: { v: 0, w: 0 }, fixado: false, decidido: false });
+    Object.assign(lead.siteDemo, antes
+      ? { status: "pronto", etapa: "pronto", url, publicadoEm: antes.publicadoEm, atualizadoEm: new Date().toISOString(), visitas: antes.visitas || { v: 0, w: 0 }, fixado: antes.fixado || lead.etapa === "fechado", decidido: antes.decidido || lead.etapa === "fechado" }
+      : { status: "pronto", etapa: "pronto", url, publicadoEm: new Date().toISOString(), visitas: { v: 0, w: 0 }, fixado: lead.etapa === "fechado", decidido: lead.etapa === "fechado" });
   } catch (e) {
     console.error("[site]", e);
     Object.assign(lead.siteDemo, { status: "erro", erro: e.message });
@@ -193,6 +215,7 @@ async function verificarSites() {
       const s = lead.siteDemo;
       if (s?.status !== "pronto" || !s.chave) continue; // sites antigos, sem contador, ficam como estão
       const v = await atualizarVisitas(lead);
+      if (lead.etapa === "fechado" && !s.decidido) { Object.assign(s, { fixado: true, decidido: true }); continue; } // cliente: nunca apaga
       if (s.decidido || !v || s.visitasErro && !s.visitasEm) continue;
       const idade = (Date.now() - new Date(s.publicadoEm).getTime()) / 864e5;
       if (idade < DIAS_TESTE) continue;
@@ -268,9 +291,22 @@ async function api(req, res, url) {
         if (["fechado", "perdido"].includes(b.etapa)) lead.followup = "";
       }
       for (const k of ["followup", "notas", "mensagem", "descartado", "telefone", "whatsapp", "email", "instagram"]) if (k in b) lead[k] = b[k];
+      if (b.venda) lead.venda = limparVenda(b.venda, lead.venda);
+      if (lead.etapa === "fechado" && lead.siteDemo) lead.siteDemo.fixado = true; // site de cliente nunca é apagado
       pontuarLead(lead); salvar(); return json(res, 200, lead);
     }
     if (!acao && m === "DELETE") { delete db.leads[id]; salvar(); return json(res, 200, { ok: true }); }
+    // cliente fechado: aplica as alterações (cor, nome, textos...) e publica o site de novo no mesmo endereço
+    if (acao === "atualizar-site" && m === "POST") {
+      if (!db.config.hostingerToken) return json(res, 400, { erro: "Coloque o token da Hostinger em Configurações (ou no TOKEN-HOSTINGER.txt)." });
+      if (!lead.siteDemo?.sub) return json(res, 400, { erro: "Esse cliente ainda não tem site publicado." });
+      if (publicando.has(lead.id)) return json(res, 409, { erro: "O site já está sendo publicado." });
+      const b = await corpo(req);
+      const resp = { ...(lead.siteDemo.respostas || {}) };
+      for (const k of ["cor", "nome", "marca", "whatsapp", "horario", "sobre", "servicos", "modelo"]) if (b[k] !== undefined && b[k] !== "") resp[k] = b[k];
+      publicarDemo(lead, lead.siteDemo.sub, resp, b.imagens || []);
+      return json(res, 202, { ok: true });
+    }
     if (acao === "mensagens" && m === "GET") return json(res, 200, mensagensDoLead(lead, db.config));
     if (acao === "mensagem" && m === "POST") {
       try { return json(res, 200, await mensagemIA(lead, db.config)); }
@@ -283,6 +319,8 @@ async function api(req, res, url) {
     if (m === "PUT") {
       const b = await corpo(req);
       for (const k of ["nome", "oferta", "preco", "prazo", "portfolio", "instagram", "apelido"]) if (k in b) db.config[k] = String(b[k]).slice(0, 500);
+      if ("metaMensal" in b) db.config.metaMensal = Math.max(0, Number(b.metaMensal) || 0);
+      if ("metaSites" in b) db.config.metaSites = Math.max(0, Math.round(Number(b.metaSites) || 0));
       if ("diasFollowup" in b) db.config.diasFollowup = Math.min(60, Math.max(1, Number(b.diasFollowup) || 3));
       if (b.anthropicKey) db.config.anthropicKey = String(b.anthropicKey).trim();
       if (b.removerChave) db.config.anthropicKey = "";

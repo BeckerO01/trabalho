@@ -268,6 +268,165 @@ const views = {
   },
 };
 views.busca.ids = {};
+
+// ---------- vendas e metas ----------
+const brl = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: (Number(n) || 0) % 1 ? 2 : 0 });
+const mesK = (d) => String(d || "").slice(0, 7);
+const somaMes = (k, n) => { const [a, m] = k.split("-").map(Number); const d = new Date(a, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
+const nomeMes = (k, longo) => new Date(k + "-15").toLocaleDateString("pt-BR", { month: longo ? "long" : "short" }).replace(".", "");
+const clientes = () => S.leads.filter((l) => l.etapa === "fechado");
+// mensalidade conta a partir do mês seguinte ao fechamento, até o mês em que foi cancelada
+const mensalEm = (l, k) => { const v = l.venda; if (!v?.mensalidade || !v.valorMensal) return 0; if (k <= mesK(v.data)) return 0; if (!v.mensalAtiva && v.mensalFim && k >= mesK(v.mensalFim)) return 0; if (!v.mensalAtiva && !v.mensalFim) return 0; return v.valorMensal; };
+function numerosDoMes(k) {
+  const cs = clientes();
+  const vendas = cs.filter((l) => l.venda && mesK(l.venda.data) === k);
+  const avulso = vendas.reduce((s, l) => s + (l.venda.valor || 0), 0);
+  const mensal = cs.reduce((s, l) => s + mensalEm(l, k), 0);
+  return { vendas, avulso, mensal, total: avulso + mensal };
+}
+views.vendas = function () {
+  const c = S.config, k = mesK(S.hoje), agora = numerosDoMes(k), ant = numerosDoMes(somaMes(k, -1));
+  const cs = clientes(), semFicha = cs.filter((l) => !l.venda);
+  const meta = Number(c.metaMensal) || 0, metaS = Number(c.metaSites) || 0;
+  const pct = meta ? Math.min(1, agora.total / meta) : 0, pctS = metaS ? Math.min(1, agora.vendas.length / metaS) : 0;
+  const mrr = cs.reduce((s, l) => s + (l.venda?.mensalidade && l.venda.mensalAtiva ? l.venda.valorMensal || 0 : 0), 0);
+  const comVenda = cs.filter((l) => l.venda?.valor);
+  const ticket = comVenda.length ? comVenda.reduce((s, l) => s + l.venda.valor, 0) / comVenda.length : 0;
+  const receber = cs.filter((l) => l.venda && !l.venda.pago).reduce((s, l) => s + (l.venda.valor || 0), 0);
+  const abordados = S.leads.filter((l) => l.etapa !== "novo").length;
+  const pend = cs.filter((l) => l.venda?.alteracoes && !l.venda.alteracoesFeitas);
+  const meses = Array.from({ length: 6 }, (_, i) => somaMes(k, i - 5)).map((m) => ({ m, ...numerosDoMes(m) }));
+  const topo = Math.max(1, meta, ...meses.map((x) => x.total));
+  const diasMes = new Date(+k.slice(0, 4), +k.slice(5, 7), 0).getDate(), dia = +S.hoje.slice(8, 10);
+  const falta = Math.max(0, meta - agora.total);
+  const anel = (p, cor, txt, sub) => `<div class="anel-meta" style="--p:${p};--c:${cor}"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52"/><circle class="v" cx="60" cy="60" r="52" pathLength="100"/></svg><div><b>${txt}</b><span>${sub}</span></div></div>`;
+  const varia = ant.total ? Math.round(((agora.total - ant.total) / ant.total) * 100) : null;
+  return ["<b>Vendas e metas</b>", `<div class="page-h"><div><h1>Vendas e metas</h1><p>${nomeMes(k, true).replace(/^./, (x) => x.toUpperCase())} · dia ${dia} de ${diasMes}</p></div>
+      <form class="metas-form" id="formMetas"><label>Meta do mês (R$)<input name="metaMensal" inputmode="decimal" value="${meta || ""}" placeholder="5000"></label><label>Meta de sites<input name="metaSites" type="number" min="0" value="${metaS || ""}" placeholder="10"></label><button class="btn sm primary">Salvar metas</button></form></div>
+    ${semFicha.length ? `<div class="aviso-venda anim" style="--i:0">📝 ${semFicha.length} cliente${semFicha.length > 1 ? "s" : ""} fechado${semFicha.length > 1 ? "s" : ""} sem ficha de venda: ${semFicha.slice(0, 4).map((l) => `<button class="lnk" data-venda="${l.id}">${esc(l.nome)}</button>`).join(", ")}</div>` : ""}
+    <div class="vendas-top">
+      <div class="card meta-card anim" style="--i:1">
+        ${anel(pct * 100, "var(--accent)", meta ? Math.round(pct * 100) + "%" : "–", "da meta")}
+        <div class="meta-txt"><p class="k">Faturado no mês</p><p class="grande" data-dinheiro="${agora.total}">${brl(agora.total)}</p>
+          <p class="muted">${meta ? (falta ? `Faltam <b>${brl(falta)}</b> pra meta de ${brl(meta)}` : `🎉 Meta de ${brl(meta)} batida!`) : "Defina sua meta do mês aqui em cima."}</p>
+          <p class="muted sm">${brl(agora.avulso)} em sites + ${brl(agora.mensal)} em mensalidades${varia !== null ? ` · <span class="${varia >= 0 ? "up" : "down"}">${varia >= 0 ? "▲" : "▼"} ${Math.abs(varia)}% vs mês passado</span>` : ""}</p></div>
+      </div>
+      <div class="card meta-card anim" style="--i:2">
+        ${anel(pctS * 100, "#2563eb", `${agora.vendas.length}${metaS ? "/" + metaS : ""}`, "sites")}
+        <div class="meta-txt"><p class="k">Sites vendidos no mês</p><p class="grande">${agora.vendas.length}</p>
+          <p class="muted">${metaS ? (agora.vendas.length >= metaS ? "🎉 Meta de sites batida!" : `Faltam <b>${metaS - agora.vendas.length}</b> site${metaS - agora.vendas.length > 1 ? "s" : ""}`) : "Defina quantos sites quer vender."}</p>
+          ${meta && falta && ticket ? `<p class="muted sm">≈ ${Math.ceil(falta / ticket)} venda(s) no seu ticket médio fecham a meta</p>` : ""}</div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat anim" style="--i:3"><div class="k">Mensalidades ativas</div><div class="v">${brl(mrr)}</div><div class="d">${brl(mrr * 12)} por ano garantido</div></div>
+      <div class="stat anim" style="--i:4"><div class="k">Ticket médio</div><div class="v">${brl(ticket)}</div><div class="d">${comVenda.length} venda(s) com valor</div></div>
+      <div class="stat anim" style="--i:5"><div class="k">A receber</div><div class="v">${brl(receber)}</div><div class="d">vendas não marcadas como pagas</div></div>
+      <div class="stat anim" style="--i:6"><div class="k">Conversão</div><div class="v">${pctFmt(cs.length, abordados)}</div><div class="d">${cs.length} cliente(s) de ${abordados} abordado(s)</div></div>
+    </div>
+    <div class="grid2">
+      <div class="card anim" style="--i:7"><h2>Últimos 6 meses</h2>
+        <div class="graf">${meses.map((x) => `<div class="col-g${x.m === k ? " atual" : ""}" title="${brl(x.avulso)} em sites + ${brl(x.mensal)} em mensalidades"><span class="val">${x.total ? brl(x.total) : ""}</span><div class="pilha"><i class="m" style="--h:${(x.mensal / topo) * 100}%"></i><i class="a" style="--h:${(x.avulso / topo) * 100}%"></i></div><span class="mes">${nomeMes(x.m)}</span></div>`).join("")}
+          ${meta ? `<div class="linha-meta" style="--h:${((meta / topo) * 100).toFixed(1)}"><span>meta</span></div>` : ""}</div>
+        <p class="legenda"><i class="a"></i> sites <i class="m"></i> mensalidades</p></div>
+      <div class="card anim" style="--i:8"><h2>Alterações pendentes</h2><div class="lista">${pend.map((l) => `<div class="it"><span><b>${esc(l.nome)}</b><br><span class="muted">${esc(l.venda.alteracoes.slice(0, 110))}${l.venda.alteracoes.length > 110 ? "…" : ""}</span></span><span class="acoes"><button class="btn sm" data-venda="${l.id}">Abrir</button><button class="btn sm primary" data-alt-feita="${l.id}">✓ Feito</button></span></div>`).join("") || '<p class="muted">Nenhuma alteração pendente. 🙌</p>'}</div></div>
+    </div>
+    <div class="card anim" style="margin-top:16px;--i:9"><h2>Clientes</h2>
+      ${cs.length ? `<div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Fechou em</th><th>Valor</th><th>Pagamento</th><th>Mensalidade</th><th>Site</th><th></th></tr></thead><tbody>
+      ${cs.sort((a, b) => (b.venda?.data || "").localeCompare(a.venda?.data || "")).map((l) => { const v = l.venda; return `<tr><td><b>${esc(l.nome)}</b>${v?.alteracoes && !v.alteracoesFeitas ? ' <span class="pill pend">alterações</span>' : ""}</td>
+        <td>${v ? br(v.data) : '<span class="muted">–</span>'}</td><td class="num">${v ? brl(v.valor) : "–"}</td>
+        <td>${v ? `${{ pix: "Pix", cartao: "Cartão", boleto: "Boleto", dinheiro: "Dinheiro", transferencia: "Transferência" }[v.pagamento]}${v.parcelas > 1 ? ` ${v.parcelas}x` : ""} ${v.pago ? '<span class="pill ok">pago</span>' : '<span class="pill pend">a receber</span>'}` : "–"}</td>
+        <td>${v?.mensalidade ? `${brl(v.valorMensal)}/mês ${v.mensalAtiva ? "" : '<span class="pill">cancelada</span>'}` : '<span class="muted">não</span>'}</td>
+        <td>${l.siteDemo?.status === "pronto" ? `<a href="${esc(l.siteDemo.url)}?pedro=1" target="_blank" rel="noopener">abrir ↗</a>` : '<span class="muted">–</span>'}</td>
+        <td><button class="btn sm ${v ? "" : "primary"}" data-venda="${l.id}">${v ? "Editar" : "Preencher"}</button></td></tr>`; }).join("")}</tbody></table></div>`
+      : `<div class="vazio"><h3>Nenhum cliente fechado ainda</h3><p>Quando você mover um lead para <b>Fechado</b>, abre uma fichinha rápida com valor, mensalidade e alterações do site.</p></div>`}
+    </div>`];
+};
+
+// ficha da venda: abre ao mover um lead para "Fechado" (ou pelo botão Editar)
+async function abrirVenda(id, comemorar) {
+  const l = S.leads.find((x) => x.id === id); if (!l) return;
+  const v = l.venda || {}, novo = !l.venda;
+  const preco = Number(String(S.config.preco || "").match(/[\d.]+(?:,\d+)?/)?.[0]?.replace(/\./g, "").replace(",", ".")) || 497;
+  const temSite = l.siteDemo?.status === "pronto" || l.siteDemo?.status === "publicando";
+  let P = null;
+  if (temSite) P = await api("GET", `site/${l.id}/padrao`).catch(() => null);
+  const m = $("#modalVenda");
+  m.innerHTML = `<div class="mv-caixa" role="document">
+    ${comemorar ? `<div class="confete" aria-hidden="true">${Array.from({ length: 28 }, (_, i) => `<i style="--x:${(i * 37) % 100}%;--d:${(i % 7) * 0.08}s;--r:${(i * 53) % 360}deg;--c:${["#0f7a5c", "#f59e0b", "#2563eb", "#e11d48", "#10b981"][i % 5]}"></i>`).join("")}</div>` : ""}
+    <div class="mv-h"><div><p class="mv-sup">${comemorar ? "🎉 Cliente fechado!" : "Ficha da venda"}</p><h2>${esc(l.nome)}</h2></div><button class="btn ghost" data-mv-fechar aria-label="Fechar">✕</button></div>
+    <form id="formVenda" class="mv-form">
+      <fieldset><legend>💰 Venda</legend>
+        <div class="row3"><label class="f">Valor do site (R$)<input name="valor" inputmode="decimal" required value="${esc(String(v.valor ?? preco).replace(".", ","))}"></label>
+        <label class="f">Pagamento<select name="pagamento">${[["pix", "Pix"], ["cartao", "Cartão"], ["boleto", "Boleto"], ["transferencia", "Transferência"], ["dinheiro", "Dinheiro"]].map(([a, b]) => `<option value="${a}" ${v.pagamento === a ? "selected" : ""}>${b}</option>`).join("")}</select></label>
+        <label class="f">Parcelas<input name="parcelas" type="number" min="1" max="24" value="${v.parcelas || 1}"></label></div>
+        <div class="row3"><label class="f">Data do fechamento<input name="data" type="date" value="${esc(v.data || S.hoje)}"></label>
+        <label class="chk"><input type="checkbox" name="pago" ${v.pago ? "checked" : ""}> Já recebi</label><span></span></div>
+      </fieldset>
+      <fieldset><legend>🔁 Mensalidade</legend>
+        <div class="seg" role="radiogroup"><label><input type="radio" name="mensalidade" value="sim" ${v.mensalidade ? "checked" : ""}><span>Fechou mensalidade</span></label><label><input type="radio" name="mensalidade" value="nao" ${v.mensalidade ? "" : "checked"}><span>Sem mensalidade</span></label></div>
+        <div class="mv-mensal" ${v.mensalidade ? "" : "hidden"}><div class="row3"><label class="f">Valor por mês (R$)<input name="valorMensal" inputmode="decimal" value="${esc(String(v.valorMensal || "").replace(".", ","))}" placeholder="49,90"></label>
+          <label class="f" style="grid-column:span 2">O que inclui<input name="servicoMensal" value="${esc(v.servicoMensal || "")}" placeholder="Hospedagem, domínio e manutenção"></label></div>
+          ${novo ? "" : `<label class="chk"><input type="checkbox" name="mensalAtiva" ${v.mensalAtiva !== false ? "checked" : ""}> Mensalidade ativa (desmarque se o cliente cancelar)</label>`}</div>
+      </fieldset>
+      <fieldset><legend>🎨 Alterações do site</legend>
+        ${P ? `<p class="hint-s">Mude o que o cliente pediu. Com "Salvar e atualizar o site", o site é publicado de novo no mesmo endereço: <a href="${esc(l.siteDemo.url)}?pedro=1" target="_blank" rel="noopener">${esc(l.siteDemo.url.replace(/^https:\/\//, "").replace(/\/$/, ""))} ↗</a></p>
+        <div class="row3"><label class="f">Cor principal<span class="cor-l"><input type="color" name="cor" value="${esc(P.cor || P.corPadrao || "#0f7a5c")}"><code>${esc(P.cor || P.corPadrao || "")}</code></span></label>
+          <label class="f">Nome no site<input name="nome" value="${esc(P.nome)}"></label><label class="f">WhatsApp<input name="whatsapp" value="${esc(P.whatsapp)}"></label></div>
+        <div class="row2"><label class="f">Horário<input name="horario" value="${esc(P.horario)}" placeholder="Seg a sex, 9h às 18h"></label>
+          <label class="f">Modelo<select name="modelo">${(P.modelos || []).map((o) => `<option value="${esc(o.id)}" ${o.id === P.modelo ? "selected" : ""}>${esc(o.nome)}</option>`).join("")}</select></label></div>
+        <label class="f">Serviços (um por linha)<textarea name="servicos" rows="3">${esc((P.servicos || []).join("\n"))}</textarea></label>
+        <label class="f">Sobre<textarea name="sobre" rows="2">${esc(P.sobre)}</textarea></label>` : `<p class="hint-s">Esse cliente ainda não tem site publicado. Anote abaixo o que ele pediu.</p>`}
+        <label class="f">Outros pedidos do cliente (anotações)<textarea name="alteracoes" rows="2" placeholder="Trocar a foto do topo, colocar o Instagram, domínio próprio…">${esc(v.alteracoes || "")}</textarea></label>
+        <label class="chk"><input type="checkbox" name="alteracoesFeitas" ${v.alteracoesFeitas ? "checked" : ""}> Alterações já feitas</label>
+      </fieldset>
+      <label class="f">Observações<textarea name="obs" rows="2">${esc(v.obs || "")}</textarea></label>
+      <div class="acoes"><button class="btn ghost" type="button" data-mv-fechar>Depois</button><span class="spacer"></span><button class="btn" type="submit" value="salvar">Salvar</button>${P && S.config.temHostinger ? '<button class="btn primary" type="submit" value="site">Salvar e atualizar o site</button>' : ""}</div>
+    </form></div>`;
+  m.hidden = false; requestAnimationFrame(() => m.classList.add("aberto"));
+  const f = $("#formVenda");
+  f.addEventListener("change", (e) => {
+    if (e.target.name === "mensalidade") $(".mv-mensal", m).hidden = e.target.value !== "sim";
+    if (e.target.name === "cor") $(".cor-l code", m).textContent = e.target.value;
+  });
+  f.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(f), g = (k) => fd.get(k) ?? "";
+    const venda = { valor: g("valor"), pagamento: g("pagamento"), parcelas: g("parcelas"), data: g("data"), pago: fd.has("pago"), mensalidade: g("mensalidade") === "sim", valorMensal: g("valorMensal"), servicoMensal: g("servicoMensal"),
+      mensalAtiva: novo ? true : fd.has("mensalAtiva"), mensalFim: !novo && v.mensalidade && v.mensalAtiva !== false && !fd.has("mensalAtiva") ? S.hoje : v.mensalFim || "", alteracoes: g("alteracoes"), alteracoesFeitas: fd.has("alteracoesFeitas"), obs: g("obs") };
+    const n = await salvarLead(l.id, { venda }); if (!n) return;
+    if (e.submitter?.value === "site" && P) {
+      const mud = {};
+      for (const k of ["cor", "nome", "whatsapp", "horario", "sobre", "modelo"]) if (String(g(k)) !== String((k === "cor" ? P.cor || P.corPadrao : P[k]) || "")) mud[k] = g(k);
+      const sv = String(g("servicos")).split("\n").map((x) => x.trim()).filter(Boolean); if (sv.join("|") !== (P.servicos || []).join("|")) mud.servicos = sv;
+      if (!Object.keys(mud).length) { toast("Venda salva. Nada mudou no site."); fecharVenda(); return; }
+      try { await api("POST", `leads/${l.id}/atualizar-site`, mud); toast("Venda salva. Atualizando o site…"); acompanharSite(l.id); }
+      catch (err) { toast(err.message); return; }
+    } else toast(novo ? "Venda registrada! 🎉" : "Venda atualizada");
+    fecharVenda(); if (rota()[0] === "vendas") render();
+  });
+}
+function fecharVenda() { const m = $("#modalVenda"); m.classList.remove("aberto"); setTimeout(() => { m.hidden = true; m.innerHTML = ""; }, 250); }
+function acompanharSite(id) {
+  const t = setInterval(async () => {
+    const s = await api("GET", `site/${id}`).catch(() => null);
+    if (!s || s.status === "publicando") return;
+    clearInterval(t); await atualizar().catch(() => {}); render();
+    toast(s.status === "pronto" ? "✅ Site atualizado com as alterações!" : "Não deu para atualizar o site: " + (s.erro || "erro"));
+  }, 3000);
+}
+document.addEventListener("click", async (e) => {
+  const a = e.target.closest("[data-venda]"); if (a) { abrirVenda(a.dataset.venda); return; }
+  if (e.target.closest("[data-mv-fechar]") || e.target.id === "modalVenda") { fecharVenda(); return; }
+  const f = e.target.closest("[data-alt-feita]");
+  if (f) { const l = S.leads.find((x) => x.id === f.dataset.altFeita); if (l?.venda) { await salvarLead(l.id, { venda: { ...l.venda, alteracoesFeitas: true } }); toast("Marcado como feito"); } }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#modalVenda").hidden) fecharVenda(); });
+document.addEventListener("submit", async (e) => {
+  if (e.target.id !== "formMetas") return; e.preventDefault();
+  const fd = new FormData(e.target);
+  try { S.config = await api("PUT", "config", { metaMensal: String(fd.get("metaMensal")).replace(/\./g, "").replace(",", "."), metaSites: fd.get("metaSites") }); toast("Metas salvas"); render(); } catch (err) { toast(err.message); }
+});
 const statusTxt = (b) => ({ fila: "Na fila", rodando: "Rodando", concluida: "Concluída", erro: "Erro", cancelada: "Cancelada" }[b.status]);
 function statusCel(b) {
   const p = b.progresso || {};
@@ -386,7 +545,8 @@ document.addEventListener("dragover", (e) => { const c = e.target.closest?.(".co
 document.addEventListener("dragleave", (e) => e.target.closest?.(".col")?.classList.remove("over"));
 document.addEventListener("drop", async (e) => {
   const c = e.target.closest?.(".col"); if (!c || !arrastando) return; e.preventDefault();
-  const id = arrastando; arrastando = null; await salvarLead(id, { etapa: c.dataset.etapa });
+  const id = arrastando; arrastando = null; const n = await salvarLead(id, { etapa: c.dataset.etapa });
+  if (n && c.dataset.etapa === "fechado" && !n.venda) abrirVenda(id, true);
 });
 
 // ---------- painel do lead ----------
@@ -409,6 +569,7 @@ function abrirLead(id) {
       <p class="hint-s">${l.siteDemo.decidido ? (l.siteDemo.fixado ? "Fixado: este site fica no ar." : "Este site fica no ar.") : `Em teste: se ninguém visitar em ${Math.max(0, 7 - Math.floor((Date.now() - new Date(l.siteDemo.publicadoEm).getTime()) / 864e5))} dia(s), ele é apagado sozinho. Se tiver visita, fica fixado e você recebe um aviso.`}${l.siteDemo.visitas?.ultima ? ` Última visita: ${dataHora(l.siteDemo.visitas.ultima)}.` : ""}</p>
       <div class="acoes"><button class="btn sm" data-site-visitas="${l.id}">Atualizar visitas</button><button class="btn sm ghost" data-site-fixar="${l.id}">${l.siteDemo.fixado ? "Desafixar" : "📌 Fixar"}</button></div>` : `<p class="hint-s">Site criado antes do contador de visitas: não é apagado sozinho.</p>`}
     </div>` : l.siteDemo?.status === "removido" ? `<div class="alerta-site tem">O site de demonstração foi apagado em ${br(l.siteDemo.removidoEm)} (7 dias sem visitas). Dá para criar de novo.</div>` : ""}
+    ${l.etapa === "fechado" ? `<div class="venda-box"><div><b>💰 Cliente</b><span>${l.venda ? `${brl(l.venda.valor)}${l.venda.mensalidade ? ` + ${brl(l.venda.valorMensal)}/mês` : ""} · ${br(l.venda.data)}` : "Ficha da venda não preenchida"}</span></div><button class="btn sm ${l.venda ? "" : "primary"}" data-venda="${l.id}">${l.venda ? "Venda e alterações" : "Preencher ficha"}</button></div>` : ""}
     <div class="acoes"><button class="btn primary" data-criar-site="${l.id}">${l.siteDemo?.status === "pronto" ? "Refazer o site de demonstração" : "Criar site de demonstração"}</button></div>
     <dl class="info">
       <dt>Score</dt><dd>${score(l)} <span class="muted" style="font-size:12px">${esc((l.motivos || []).join(" · "))}</span></dd>
@@ -452,6 +613,7 @@ function abrirLead(id) {
     $("#dEtapa").value = b.dataset.et;
     const n = await salvarLead(l.id, { etapa: b.dataset.et }); if (n) { Object.assign(l, n); $("#dFollow").value = n.followup || ""; }
     desenharEtapa(); escolher(0); toast("Movido para " + nomeEtapa(b.dataset.et));
+    if (b.dataset.et === "fechado" && !l.venda) abrirVenda(l.id, true);
   });
   $("#dCenarios").addEventListener("click", (ev) => { const b = ev.target.closest("[data-cen]"); if (b) escolher(Number(b.dataset.cen)); });
   $("#dFechar").addEventListener("click", () => { d.hidden = true; });

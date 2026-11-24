@@ -303,7 +303,20 @@ const fam = (f) => String(f).replace(/\s*\(.*$/, "").trim();
 const slug = (l) => semAcento(nomeCurto(l)).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "site";
 const H = (s) => esc(s);
 
-function gerarSite(l, r = {}) {
+// favicon: logo do cliente (se mandou) ou a inicial da marca num quadrado com a cor do site
+function comFavicon(res, l, r) {
+  if (/rel=["']?(shortcut )?icon/i.test(res.html)) return res;
+  const cor = (/^#[0-9a-f]{6}$/i.test(r.cor || "") && r.cor) || (res.html.match(/--(?:a1|acc|accent)\s*:\s*(#[0-9a-f]{6})/i) || [])[1] || "#111111";
+  const letra = ([...((r.marca || "").trim() || palavraMarca(l) || nomeCurto(l) || "S")].find((c) => /[\p{L}\p{N}]/u.test(c)) || "S").toUpperCase();
+  const tinta = lum(cor) > 0.55 ? "#111111" : "#ffffff";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="${cor}"/><text x="32" y="44" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="36" fill="${tinta}">${esc(letra)}</text></svg>`;
+  const href = r.logo ? esc(r.logo) : "data:image/svg+xml," + encodeURIComponent(svg);
+  const tags = `<link rel="icon" href="${href}">\n<meta name="theme-color" content="${cor}">\n`;
+  return { ...res, html: res.html.replace(/<\/head>/i, tags + "</head>") };
+}
+function gerarSite(l, r = {}) { return comFavicon(gerarSiteBase(l, r), l, r); }
+
+function gerarSiteBase(l, r = {}) {
   l = { ...l, ...(r.whatsapp ? { whatsapp: r.whatsapp } : {}) };
   const ehRest = ehRestaurante(l), p0 = perfil(l), tp = tipoPremium(p0.id, ehRest);
   const modelo = modelosDe(l).some((m) => m.id === r.modelo) ? r.modelo : modelosDe(l)[0].id;
