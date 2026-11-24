@@ -288,7 +288,7 @@ const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.2126 * (n
 const RAMO_W = /^(oficina|mecanica|auto|center|centro|barbearia|barber|shop|pet|petshop|restaurante|pizzaria|hamburgueria|lanchonete|padaria|confeitaria|academia|studio|clinica|consultorio|escritorio|loja|salao|espaco|instituto|odontologia|odonto|estetica|advocacia|advogados|contabilidade|imobiliaria|escola|cursos?|bar|cafe|cafeteria|lavacar|lava|jato|funilaria|eletrica|materiais|construcao|veterinaria|veterinario|farmacia|otica|moda|beleza|saude|bem|estar|e|de|da|do|das|dos|em|the|and)$/;
 function palavraMarca(l) {
   const ramo = new Set(semAcento(`${l.categoria || ""} ${perfil(l).termo}`).split(/[^a-z]+/));
-  const ws = nomeCurto(l).split(/\s+/).filter((w) => /^[\p{L}\p{N}'&]+$/u.test(w) && !RAMO_W.test(semAcento(w)) && !GENERICAS.test(semAcento(w)) && !ramo.has(semAcento(w)));
+  const ws = nomeCurto(l).split(/\s+/).filter((w) => /^[\p{L}\p{N}'&]+$/u.test(w) && /[\p{L}\p{N}]/u.test(w) && !RAMO_W.test(semAcento(w)) && !GENERICAS.test(semAcento(w)) && !ramo.has(semAcento(w)));
   if (!ws.length) return (nomeCurto(l).split(/\s+/).pop() || "marca").toLowerCase();
   const m = ws[0].length <= 4 && ws[1] ? ws[0] + " " + ws[1] : ws[0];
   return m.toLowerCase().slice(0, 18);
