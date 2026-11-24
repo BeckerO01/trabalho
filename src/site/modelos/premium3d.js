@@ -7,7 +7,7 @@ import { TIPOS as TIPOS_REST, tipoRestaurante } from "./restaurante.js";
 const U = (id, w = 1400) => `https://images.unsplash.com/${id}?w=${w}&q=78&auto=format&fit=crop`;
 const FOTOS = {
   academia: ["photo-1534438327276-14e5300c3a48", "photo-1571019614242-c5c5dee9f50b", "photo-1517836357463-d25dfeac3438", "photo-1540497077202-7c8a3999166f", "photo-1583454110551-21f2fa2afe61", "photo-1599058917212-d750089bc07e", "photo-1574680096145-d05b474e2155", "photo-1581009146145-b5ef050c2e1e"],
-  dentista: ["photo-1629909613654-28e377c37b09", "photo-1606811841689-23dfddce3e95", "photo-1598256989800-fe5f95da9787", "photo-1609840114035-3c981b782dfe", "photo-1588776814546-1ffcf47267a5", "photo-1606811971618-4486d14f3f99"],
+  dentista: ["photo-1629909613654-28e377c37b09", "photo-1606811841689-23dfddce3e95", "photo-1598256989800-fe5f95da9787", "photo-1609840114035-3c981b782dfe", "photo-1588776814546-1ffcf47267a5", "photo-1593022356769-11f762e25ed9"],
   clinica: ["photo-1570172619644-dfd03ed5d881", "photo-1560750588-73207b1ef5b8", "photo-1612817288484-6f916006741a", "photo-1616394584738-fc6e612e71b9", "photo-1519823551278-64ac92734fb1", "photo-1576091160550-2173dba999ef"],
 };
 
@@ -23,7 +23,7 @@ const TIPOS = {
     planos: [["Mensal", "Para começar agora", ["Musculação completa", "Avaliação física", "Treino montado"]], ["Trimestral", "O mais escolhido", ["Tudo do mensal", "Reavaliação a cada mês", "Melhor custo por mês"]], ["Anual", "Para quem é de verdade", ["Tudo do trimestral", "Menor valor por mês", "Prioridade nas aulas"]]],
   },
   dentista: {
-    objeto: "dente", escuro: false, rotulo: "clínica odontológica",
+    objeto: "sorriso", escuro: false, rotulo: "clínica odontológica",
     cores: { bg: "#ffffff", sup: "#f1f7fb", txt: "#0d2230", mut: "#5d7180", a1: "#1497c4", a2: "#e8f8ff" },
     fontes: ["Plus Jakarta Sans", "Inter"], fontesUrl: "family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600", caixaAlta: false,
     titulo: ["Seu sorriso", "merece", "cuidado de verdade."], destaque: 2,
@@ -32,7 +32,7 @@ const TIPOS = {
     passos: [["Agende a avaliação", "Pelo WhatsApp, no horário que fica melhor para você."], ["Exame e conversa", "Examinamos com calma e explicamos tudo, sem pressa."], ["Plano de tratamento", "Você recebe o plano e as opções antes de começar."]],
   },
   clinica: {
-    objeto: "forma", escuro: false, rotulo: "clínica",
+    objeto: "serum", escuro: false, rotulo: "clínica",
     cores: { bg: "#fffaf7", sup: "#f6ece6", txt: "#2a1e1a", mut: "#7a6a63", a1: "#b9785f", a2: "#fff3ee" },
     fontes: ["Cormorant Garamond", "Jost"], fontesUrl: "family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@400;500;600", caixaAlta: false,
     titulo: ["Beleza que", "realça", "quem você é."], destaque: 1,
@@ -41,6 +41,8 @@ const TIPOS = {
     passos: [["Agende sua avaliação", "Pelo WhatsApp, em poucos minutos."], ["Conversa e diagnóstico", "Entendemos o que você quer e indicamos o melhor caminho."], ["Tratamento sob medida", "Acompanhamento antes, durante e depois."]],
   },
 };
+// hambúrguer 3D real (escaneado), hospedado uma vez em pedroprendim.com/3d com CORS liberado; cópia em ./3d/burger.glb
+export const GLB_BURGER = "https://pedroprendim.com/3d/burger.glb";
 const OBJ_REST = { burger: "burger", pizza: "pizza", padaria: "xicara", japones: "tigela", geral: "tigela" };
 
 /** Tipo premium do lead (ou null) */
@@ -86,7 +88,7 @@ export function renderPremium(l, d, tipoId) {
   const mapa = `https://www.google.com/maps?q=${encodeURIComponent(d.endereco || `${d.nome} ${d.cidade}`)}&z=16&output=embed`;
   const horario = (d.horario || "").trim();
   const sobre = d.sobre || `${d.nome} é ${t.rotulo === "academia" ? "uma academia" : "um" + (/^[aeiou]/.test(t.rotulo) ? "a " : " ") + t.rotulo} ${d.bairro ? "no bairro " + d.bairro + ", em " + d.cidade : "em " + d.cidade}. A gente acredita que atendimento bom é atendimento próximo: cada pessoa recebe atenção, explicação clara e um cuidado feito para ela.`;
-  const cfg3d = JSON.stringify({ objeto: t.objeto, a1: c.a1, a2: c.a2 }).replace(/</g, "\\u003c");
+  const cfg3d = JSON.stringify({ objeto: t.objeto, a1: c.a1, a2: c.a2, glb: t.objeto === "burger" ? GLB_BURGER : "" }).replace(/</g, "\\u003c");
   const ICONES = ["M4 12h16M12 4v16", "M5 12l4 4L19 6", "M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z", "M3 12a9 9 0 1 0 18 0 9 9 0 1 0-18 0M12 7v5l3 2", "M4 20V10l8-6 8 6v10H4z", "M12 21s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.5-7 10-7 10z"];
 
   return `<!doctype html>
